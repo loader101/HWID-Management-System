@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HWID Management System &middot; Cyberpunk Control Center</title>
+  <meta name="description" content="Vercel-ready HWID Activation and Management Dashboard for C++ Hardware Lock Systems." />
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'><path d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V18a1 1 0 0 1-2 0v-1.07A7 7 0 0 1 5.07 11H4a1 1 0 0 1 0-2h1.07A7 7 0 0 1 11 3.07V2a1 1 0 0 1 2 0v1.07A7 7 0 0 1 18.93 9H20a1 1 0 0 1 0 2h-1.07A7 7 0 0 1 13 16.93zM12 5a6 6 0 1 0 6 6 6 6 0 0 0-6-6z'/></svg>" />
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">
+            HWID LOCK MANAGER
+            <span class="brand-badge">Vercel Edge</span>
+          </div>
+          <div class="brand-subtitle">Automated C++ HardwareID License Server &amp; Raw Synchronizer</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div id="storageStatusBadge" class="status-indicator" style="cursor:pointer;" title="Click to view Cloud Storage Setup">
+          <span class="pulse-dot"></span>
+          <span id="storageStatusText">Checking Storage...</span>
+        </div>
+        <button id="syncDbBtn" class="btn btn-secondary btn-sm" title="Force sync local database to serverless backend">
+          ⚡ Sync Server
+        </button>
+        <button id="openSettingsBtn" class="btn btn-secondary btn-sm" title="Configure Admin Password">
+          ⚙️ Admin Key
+        </button>
+        <button onclick="window.HWIDApp.exportBackup()" class="btn btn-secondary btn-sm" title="Backup all HWIDs as JSON">
+          💾 Backup
+        </button>
+      </div>
+    </header>
+
+    <!-- Quick URL Banner for C++ Client -->
+    <section class="quick-url-banner">
+      <div class="quick-url-info">
+        <div class="quick-url-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+        </div>
+        <div class="quick-url-text">
+          <h4>
+            C++ Client Raw Endpoint
+            <span class="brand-badge" style="font-size:0.6rem">NAME:HWID FORMAT</span>
+          </h4>
+          <p>Ito ang URL na ilalagay sa <code>HardwareId.cpp</code> line 260</p>
+        </div>
+      </div>
+
+      <div class="quick-url-box">
+        <span id="quickUrlDisplay" class="quick-url-value">Loading...</span>
+        <button id="copyQuickUrlBtn" class="btn btn-primary btn-sm" title="Copy raw link for C++ client">
+          📋 Copy URL
+        </button>
+        <a id="viewRawLink" href="/api/raw" target="_blank" class="btn btn-secondary btn-sm" title="Open raw text in new tab">
+          🔗 View Raw
+        </a>
+      </div>
+    </section>
+
+    <!-- Real-time Stats Grid -->
+    <section class="stats-grid">
+      <div class="stat-card emerald">
+        <div class="stat-header">
+          <span class="stat-label">Active Licenses</span>
+          <div class="stat-icon">⚡</div>
+        </div>
+        <div id="statActive" class="stat-number">0</div>
+        <div class="stat-desc">Synchronized in Raw Endpoint</div>
+      </div>
+
+      <div class="stat-card cyan">
+        <div class="stat-header">
+          <span class="stat-label">Total Registered</span>
+          <div class="stat-icon">👥</div>
+        </div>
+        <div id="statTotal" class="stat-number">0</div>
+        <div class="stat-desc">Total HWID users in database</div>
+      </div>
+
+      <div class="stat-card amber">
+        <div class="stat-header">
+          <span class="stat-label">Suspended</span>
+          <div class="stat-icon">⏸️</div>
+        </div>
+        <div id="statSuspended" class="stat-number">0</div>
+        <div class="stat-desc">Temporarily disabled accounts</div>
+      </div>
+
+      <div class="stat-card rose">
+        <div class="stat-header">
+          <span class="stat-label">Expired</span>
+          <div class="stat-icon">⏳</div>
+        </div>
+        <div id="statExpired" class="stat-number">0</div>
+        <div class="stat-desc">Auto-excluded from access</div>
+      </div>
+    </section>
+
+    <!-- Main Data & Management Section -->
+    <main class="main-card">
+      
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="search-filter-group">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              id="searchInput" 
+              class="input-styled" 
+              placeholder="Search user name, HWID, notes..." 
+              autocomplete="off"
+            />
+          </div>
+
+          <select id="statusFilterSelect" class="select-styled" title="Filter by status">
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="suspended">Suspended</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+
+        <div class="action-button-group">
+          <button id="refreshBtn" class="btn btn-secondary" title="Refresh List">
+            🔄 Refresh
+          </button>
+          <button id="openCppBtn" class="btn btn-secondary" title="View C++ Code Integration">
+            💻 C++ Code
+          </button>
+          <button id="openBulkBtn" class="btn btn-secondary" title="Bulk Import NAME:HWID lines">
+            📦 Bulk Import
+          </button>
+          <button id="openQuickDeleteBtn" class="btn btn-danger" title="Delete a user and remove from raw text">
+            🗑️ Delete User
+          </button>
+          <button id="openAddBtn" class="btn btn-emerald" title="Activate a new HWID">
+            ➕ Activate HWID
+          </button>
+        </div>
+      </div>
+
+      <!-- Table Section -->
+      <div id="tableContainer" class="table-responsive">
+        <table class="hwid-table">
+          <thead>
+            <tr>
+              <th style="width: 25%;">User / Identity</th>
+              <th style="width: 32%;">Hardware ID (HWID)</th>
+              <th style="width: 13%;">Status</th>
+              <th style="width: 15%;">Validity / Expiry</th>
+              <th style="width: 15%; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="hwidTableBody">
+            <!-- Dynamic rows injected by app.js -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="empty-icon">🛡️</div>
+        <h3 class="empty-title">No HWID Records Found</h3>
+        <p class="empty-desc">Wala pang naka-activate na HWID o walang tumutugma sa iyong search query. Mag-activate ng user ngayon.</p>
+        <button onclick="document.getElementById('openAddBtn').click()" class="btn btn-emerald">
+          ➕ Activate First HWID
+        </button>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Single Activate HWID
+       ======================================================================== -->
+  <div id="addModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>⚡</span> Activate User HWID
+        </h3>
+        <button id="closeAddBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <form id="addForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="addNameInput">
+              <span>User Name / Tag</span>
+              <span class="form-hint">Hal: Jaymian, Juan, Client_01</span>
+            </label>
+            <input 
+              type="text" 
+              id="addNameInput" 
+              class="input-styled" 
+              placeholder="e.g. Jaymian" 
+              required 
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addHwidInput">
+              <span>Hardware ID (Format: 4-4-4-4)</span>
+              <button type="button" id="genRandomHwidBtn" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.72rem;">
+                🎲 Gen Sample
+              </button>
+            </label>
+            <input 
+              type="text" 
+              id="addHwidInput" 
+              class="input-styled" 
+              placeholder="XXXX-XXXX-XXXX-XXXX" 
+              maxlength="19" 
+              required 
+              autocomplete="off"
+              style="font-family: 'JetBrains Mono', monospace; letter-spacing: 0.05em;"
+            />
+            <div class="form-hint" style="margin-top: 4px;">
+              Awtomatikong maglalagay ng dashes habang nagta-type. Base sa <code>HardwareId.cpp</code>.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addExpiryInput">
+              <span>License Validity / Expiry</span>
+              <span class="form-hint">Default: Lifetime</span>
+            </label>
+            <div id="addExpiryPresets" class="preset-buttons">
+              <button type="button" class="btn-preset active" data-preset="lifetime">⚡ Lifetime</button>
+              <button type="button" class="btn-preset" data-preset="1d">1 Day</button>
+              <button type="button" class="btn-preset" data-preset="7d">7 Days</button>
+              <button type="button" class="btn-preset" data-preset="30d">30 Days</button>
+            </div>
+            <input 
+              type="datetime-local" 
+              id="addExpiryInput" 
+              class="input-styled" 
+              style="margin-top: 10px;"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="addNotesInput">
+              <span>Notes / Discord Tag / Reference (Optional)</span>
+            </label>
+            <input 
+              type="text" 
+              id="addNotesInput" 
+              class="input-styled" 
+              placeholder="e.g. Discord: Jaymian#1234, Paid via Gcash" 
+            />
+          </div>
+
+          <!-- Live Raw Line Preview -->
+          <div class="preview-box">
+            <div class="preview-title">Awtomatikong Maidadagdag sa Raw Endpoint:</div>
+            <div id="addLivePreview" class="preview-content">USERNAME:XXXX-XXXX-XXXX-XXXX</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="document.getElementById('closeAddBtn').click()" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-emerald">
+            ✓ Activate Now
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Bulk Import HWIDs
+       ======================================================================== -->
+  <div id="bulkModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>📦</span> Bulk Import HWIDs
+        </h3>
+        <button id="closeBulkBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <form id="bulkForm">
+        <div class="modal-body">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+            I-paste dito ang listahan ng mga users sa format na <code>NAME:HWID</code> (isang user bawat linya).
+          </p>
+
+          <div class="form-group">
+            <textarea 
+              id="bulkTextarea" 
+              class="textarea-styled" 
+              rows="8" 
+              placeholder="User1:4944-4444-4444-4444&#10;User2:61A3-8B54-96B2-7777&#10;User3:1111-2222-3333-4444"
+              style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;"
+            ></textarea>
+            <div id="bulkStatsInfo" class="form-hint" style="margin-top: 6px;">
+              Detected 0 valid entry lines.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="document.getElementById('closeBulkBtn').click()" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            ✓ Import All
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Edit Record
+       ======================================================================== -->
+  <div id="editModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>✏️</span> Edit HWID License
+        </h3>
+        <button id="closeEditBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <form id="editForm">
+        <input type="hidden" id="editIdInput" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="editNameInput">User Name</label>
+            <input type="text" id="editNameInput" class="input-styled" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="editHwidInput">Hardware ID (HWID)</label>
+            <input 
+              type="text" 
+              id="editHwidInput" 
+              class="input-styled" 
+              required 
+              style="font-family: 'JetBrains Mono', monospace;"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="editStatusSelect">License Status</label>
+            <select id="editStatusSelect" class="select-styled" style="max-width: 100%;">
+              <option value="active">Active (Permitted)</option>
+              <option value="suspended">Suspended (Blocked)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="editExpiryInput">Expiration Date</label>
+            <div id="editExpiryPresets" class="preset-buttons">
+              <button type="button" class="btn-preset active" data-preset="lifetime">⚡ Lifetime</button>
+              <button type="button" class="btn-preset" data-preset="7d">+7 Days</button>
+              <button type="button" class="btn-preset" data-preset="30d">+30 Days</button>
+            </div>
+            <input type="datetime-local" id="editExpiryInput" class="input-styled" style="margin-top: 10px;" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="editNotesInput">Notes</label>
+            <input type="text" id="editNotesInput" class="input-styled" />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="document.getElementById('closeEditBtn').click()" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            ✓ Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: C++ Integration Snippet
+       ======================================================================== -->
+  <div id="cppModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>💻</span> HardwareId.cpp Integration
+        </h3>
+        <button id="closeCppBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px;">
+          Palitan ang <code>CheckHWIDLock()</code> function sa iyong <code>HardwareId.cpp</code> gamit ang code sa ibaba:
+        </p>
+
+        <div class="code-block" style="position: relative;">
+          <pre id="cppCodeSnippet">Loading...</pre>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" onclick="document.getElementById('closeCppBtn').click()" class="btn btn-secondary">
+          Close
+        </button>
+        <button id="copyCppSnippetBtn" class="btn btn-primary">
+          📋 Copy C++ Code
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Confirm Delete (Row Action)
+       ======================================================================== -->
+  <div id="confirmDeleteModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 480px; border-color: rgba(244, 63, 94, 0.4);">
+      <div class="modal-header" style="background: rgba(244, 63, 94, 0.08);">
+        <h3 class="modal-title" style="color: var(--accent-rose);">
+          <span>⚠️</span> Tanggalin ang User sa HWID System?
+        </h3>
+        <button id="closeConfirmDeleteBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <form id="confirmDeleteForm">
+        <input type="hidden" id="deleteTargetId" />
+        <input type="hidden" id="deleteTargetName" />
+        <div class="modal-body">
+          <div style="text-align: center; margin-bottom: 16px;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 10px;">
+              🗑️
+            </div>
+            <h4 id="deleteTargetDisplayName" style="font-size: 1.15rem; color: #ffffff; font-weight: 700; margin-bottom: 4px;">User Name</h4>
+            <div id="deleteTargetDisplayHwid" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--accent-cyan);">XXXX-XXXX-XXXX-XXXX</div>
+          </div>
+
+          <div style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.82rem; color: #fecdd3; line-height: 1.5;">
+            <strong>🚨 Awtomatikong Epekto:</strong>
+            <ul style="margin-left: 18px; margin-top: 6px;">
+              <li>Mabubura ang user sa database.</li>
+              <li><strong>Agad itong matatanggal sa Raw Text list (<code style="color:#00f0ff;">/api/raw</code>)</strong>.</li>
+              <li>Maba-block at hindi na makakapasok ang kanyang C++ client.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="background: rgba(244, 63, 94, 0.04);">
+          <button type="button" onclick="document.getElementById('closeConfirmDeleteBtn').click()" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-danger">
+            🗑️ Oo, Burahin at Tanggalin sa Raw
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Quick Delete by Username / HWID (Toolbar Action)
+       ======================================================================== -->
+  <div id="quickDeleteModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 500px; border-color: rgba(244, 63, 94, 0.3);">
+      <div class="modal-header" style="background: rgba(244, 63, 94, 0.06);">
+        <h3 class="modal-title" style="color: var(--accent-rose);">
+          <span>🗑️</span> Delete User by Name o HWID
+        </h3>
+        <button id="closeQuickDeleteBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <form id="quickDeleteForm">
+        <div class="modal-body">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px;">
+            I-type ang <strong>User Name</strong> o <strong>HWID</strong> ng gustong tanggalin sa system at sa raw text list:
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="quickDeleteInput">User Name o HWID</label>
+            <input 
+              type="text" 
+              id="quickDeleteInput" 
+              class="input-styled" 
+              placeholder="e.g. Juan o 61A3-8B54-96B2-7777" 
+              required 
+              autocomplete="off"
+            />
+          </div>
+
+          <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: var(--radius-md); padding: 10px 12px; font-size: 0.8rem; color: var(--text-secondary);">
+            💡 Kapag binura, awtomatikong magre-refresh ang <code>/api/raw</code> at mawawala ang linya ng <code>User:HWID</code>.
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="document.getElementById('closeQuickDeleteBtn').click()" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-danger">
+            🗑️ Tanggalin User
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Cloud Storage Setup (Upstash / Vercel KV Guide)
+       ======================================================================== -->
+  <div id="cloudStorageModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 620px; border-color: rgba(0, 240, 255, 0.3);">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>☁️</span> Vercel Cloud Database Setup (100% Libre)
+        </h3>
+        <button id="closeCloudStorageBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div style="margin-bottom: 16px; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.6;">
+          <p style="margin-bottom: 10px;">
+            Sa <strong>Vercel Serverless</strong>, ang file system ay <em>ephemeral / stateless</em> (naglalaho pagkatapos ng cold-start). Para <strong>100% permanenteng ma-save</strong> ang lahat ng in-activate at binura mong users:
+          </p>
+          
+          <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: var(--radius-md); padding: 14px; margin-bottom: 14px;">
+            <h4 style="color: var(--accent-cyan); font-size: 0.92rem; font-weight: 700; margin-bottom: 8px;">
+              🚀 1-Click Setup sa Vercel Dashboard (Libre):
+            </h4>
+            <ol style="margin-left: 20px; font-size: 0.84rem; color: #e2e8f0; line-height: 1.7;">
+              <li>Pumunta sa iyong Vercel Project sa <a href="https://vercel.com/dashboard" target="_blank" style="color: #38bdf8; text-decoration: underline;">vercel.com/dashboard</a>.</li>
+              <li>I-click ang <strong>Storage</strong> tab sa itaas.</li>
+              <li>Piliin ang <strong>Upstash</strong> (o <strong>KV</strong>) at i-click ang <strong>Create Database</strong> (Free Tier).</li>
+              <li>I-click ang <strong>Connect to Project</strong> at piliin ang iyong HWID project repo.</li>
+              <li>I-click ang <strong>Redeploy</strong> sa Vercel. <strong>Tapos na!</strong> Awtomatikong magko-connect ang database.</li>
+            </ol>
+          </div>
+
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.82rem; color: #d1fae5;">
+            <strong>⚡ Built-in Browser Sync:</strong><br>
+            Habang hindi pa naka-connect ang Upstash, naka-save din ang iyong database sa iyong browser! Pwede mong i-click ang <code>⚡ Sync Server</code> button anumang oras para i-sync ang iyong mga HWIDs sa Vercel container.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" onclick="document.getElementById('closeCloudStorageBtn').click()" class="btn btn-secondary">
+          Close
+        </button>
+        <button type="button" onclick="window.HWIDApp.forceSyncToServer()" class="btn btn-emerald">
+          ⚡ Force Sync Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Admin Settings / Key
+       ======================================================================== -->
+  <div id="authModal" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>🔐</span> Admin Authentication
+        </h3>
+        <button id="closeAuthBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <form id="authForm">
+        <div class="modal-body">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px;">
+            Ilagay ang iyong Admin Secret / PIN para ma-manage ang mga HWIDs. (Default: <code>admin123</code>).
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="adminSecretInput">Admin Secret / Password</label>
+            <input 
+              type="password" 
+              id="adminSecretInput" 
+              class="input-styled" 
+              placeholder="Enter admin password..." 
+              required 
+            />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="document.getElementById('closeAuthBtn').click()" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            Unlock Dashboard
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- App Script -->
+  <script src="/js/app.js"></script>
+</body>
+</html>
