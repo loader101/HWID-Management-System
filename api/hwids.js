@@ -1,9 +1,11 @@
 const {
   ADMIN_SECRET,
+  getStorageType,
   getAllHWIDs,
   saveAllHWIDs,
   isExpired,
   formatHWID,
+  parseJsonBody,
 } = require('./_storage');
 
 function checkAuth(req) {
@@ -12,7 +14,7 @@ function checkAuth(req) {
   
   if (secretHeader && secretHeader === ADMIN_SECRET) return true;
   if (authHeader) {
-    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (token === ADMIN_SECRET) return true;
     try {
       const decoded = Buffer.from(token, 'base64').toString('utf8');
@@ -30,7 +32,7 @@ function generateId() {
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret, x-sync-database');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -44,7 +46,21 @@ module.exports = async function handler(req, res) {
   try {
     let records = await getAllHWIDs();
 
-    // GET /api/hwids - List all HWIDs + computed stats
+    // Check if client provided full sync database
+    const syncHeader = req.headers['x-sync-database'];
+    if (syncHeader) {
+      try {
+        const decodedSync = JSON.parse(Buffer.from(syncHeader, 'base64').toString('utf8'));
+        if (Array.isArray(decodedSync) && decodedSync.length > records.length) {
+          records = decodedSync;
+          await saveAllHWIDs(records);
+        }
+      } catch (e) {}
+    }
+
+    // ------------------------------------------------------------------------
+    // GET /api/hwids - List all HWIDs + computed stats & storage status
+    // ------------------------------------------------------------------------
     if (req.method === 'GET') {
       let activeCount = 0;
       let expiredCount = 0;
@@ -68,6 +84,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({
         success: true,
         data: processed,
+        storageType: getStorageType(),
         stats: {
           total: records.length,
           active: activeCount,
@@ -77,9 +94,23 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // POST /api/hwids - Add single or bulk HWIDs
+    // Safely parse JSON body for POST, PUT, DELETE
+    const body = await parseJsonBody(req);
+
+    // ------------------------------------------------------------------------
+    // POST /api/hwids - Add single, bulk, or full sync
+    // ------------------------------------------------------------------------
     if (req.method === 'POST') {
-      const body = req.body || {};
+      // Full Sync / Restore
+      if (body.action === 'sync' && Array.isArray(body.records)) {
+        records = body.records;
+        await saveAllHWIDs(records);
+        return res.status(200).json({
+          success: true,
+          message: `Database synchronized! ${records.length} records active.`,
+          count: records.length,
+        });
+      }
 
       // Handle Bulk Add
       if (Array.isArray(body.bulk)) {
@@ -159,9 +190,11 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // ------------------------------------------------------------------------
     // PUT /api/hwids - Update record
+    // ------------------------------------------------------------------------
     if (req.method === 'PUT') {
-      const { id, name, hwid, status, expiresAt, notes } = req.body || {};
+      const { id, name, hwid, status, expiresAt, notes } = body;
 
       if (!id) {
         return res.status(400).json({ success: false, message: 'Record ID is required for update.' });
@@ -188,11 +221,17 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // DELETE /api/hwids - Delete record
+    // ------------------------------------------------------------------------
+    // DELETE /api/hwids - Delete record by ID, Username, or HWID
+    // ------------------------------------------------------------------------
     if (req.method === 'DELETE') {
-      const { id, name, hwid } = req.body || req.query || {};
+      const { id, name, hwid } = body;
+      const queryId = req.query && req.query.id;
+      const targetId = id || queryId;
+      const targetName = name || (req.query && req.query.name);
+      const targetHwid = hwid || (req.query && req.query.hwid);
 
-      if (!id && !name && !hwid) {
+      if (!targetId && !targetName && !targetHwid) {
         return res.status(400).json({ success: false, message: 'Record ID, Username, or HWID is required.' });
       }
 
@@ -200,9 +239,9 @@ module.exports = async function handler(req, res) {
       const deletedItems = [];
 
       records = records.filter((r) => {
-        const matchId = id && (r.id === id || r.hwid === id);
-        const matchName = name && r.name && r.name.trim().toLowerCase() === name.trim().toLowerCase();
-        const matchHwid = hwid && formatHWID(r.hwid) === formatHWID(hwid);
+        const matchId = targetId && (r.id === targetId || r.hwid === targetId);
+        const matchName = targetName && r.name && r.name.trim().toLowerCase() === targetName.trim().toLowerCase();
+        const matchHwid = targetHwid && formatHWID(r.hwid) === formatHWID(targetHwid);
 
         if (matchId || matchName || matchHwid) {
           deletedItems.push(r);

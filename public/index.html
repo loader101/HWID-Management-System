@@ -31,10 +31,13 @@
       </div>
 
       <div class="header-actions">
-        <div class="status-indicator">
+        <div id="storageStatusBadge" class="status-indicator" style="cursor:pointer;" title="Click to view Cloud Storage Setup">
           <span class="pulse-dot"></span>
-          <span>System Online</span>
+          <span id="storageStatusText">Checking Storage...</span>
         </div>
+        <button id="syncDbBtn" class="btn btn-secondary btn-sm" title="Force sync local database to serverless backend">
+          ⚡ Sync Server
+        </button>
         <button id="openSettingsBtn" class="btn btn-secondary btn-sm" title="Configure Admin Password">
           ⚙️ Admin Key
         </button>
@@ -523,6 +526,58 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Cloud Storage Setup (Upstash / Vercel KV Guide)
+       ======================================================================== -->
+  <div id="cloudStorageModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 620px; border-color: rgba(0, 240, 255, 0.3);">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>☁️</span> Vercel Cloud Database Setup (100% Libre)
+        </h3>
+        <button id="closeCloudStorageBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div style="margin-bottom: 16px; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.6;">
+          <p style="margin-bottom: 10px;">
+            Sa <strong>Vercel Serverless</strong>, ang file system ay <em>ephemeral / stateless</em> (naglalaho pagkatapos ng cold-start). Para <strong>100% permanenteng ma-save</strong> ang lahat ng in-activate at binura mong users:
+          </p>
+          
+          <div style="background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.25); border-radius: var(--radius-md); padding: 14px; margin-bottom: 14px;">
+            <h4 style="color: var(--accent-cyan); font-size: 0.92rem; font-weight: 700; margin-bottom: 8px;">
+              🚀 1-Click Setup sa Vercel Dashboard (Libre):
+            </h4>
+            <ol style="margin-left: 20px; font-size: 0.84rem; color: #e2e8f0; line-height: 1.7;">
+              <li>Pumunta sa iyong Vercel Project sa <a href="https://vercel.com/dashboard" target="_blank" style="color: #38bdf8; text-decoration: underline;">vercel.com/dashboard</a>.</li>
+              <li>I-click ang <strong>Storage</strong> tab sa itaas.</li>
+              <li>Piliin ang <strong>Upstash</strong> (o <strong>KV</strong>) at i-click ang <strong>Create Database</strong> (Free Tier).</li>
+              <li>I-click ang <strong>Connect to Project</strong> at piliin ang iyong HWID project repo.</li>
+              <li>I-click ang <strong>Redeploy</strong> sa Vercel. <strong>Tapos na!</strong> Awtomatikong magko-connect ang database.</li>
+            </ol>
+          </div>
+
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.82rem; color: #d1fae5;">
+            <strong>⚡ Built-in Browser Sync:</strong><br>
+            Habang hindi pa naka-connect ang Upstash, naka-save din ang iyong database sa iyong browser! Pwede mong i-click ang <code>⚡ Sync Server</code> button anumang oras para i-sync ang iyong mga HWIDs sa Vercel container.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" onclick="document.getElementById('closeCloudStorageBtn').click()" class="btn btn-secondary">
+          Close
+        </button>
+        <button type="button" onclick="window.HWIDApp.forceSyncToServer()" class="btn btn-emerald">
+          ⚡ Force Sync Now
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ========================================================================
        MODAL: Admin Settings / Key
        ======================================================================== -->

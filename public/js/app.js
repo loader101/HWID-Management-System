@@ -98,6 +98,13 @@
     authForm: document.getElementById('authForm'),
     adminSecretInput: document.getElementById('adminSecretInput'),
 
+    // Cloud Storage & Sync
+    storageStatusBadge: document.getElementById('storageStatusBadge'),
+    storageStatusText: document.getElementById('storageStatusText'),
+    syncDbBtn: document.getElementById('syncDbBtn'),
+    cloudStorageModal: document.getElementById('cloudStorageModal'),
+    closeCloudStorageBtn: document.getElementById('closeCloudStorageBtn'),
+
     // Toast Container
     toastContainer: document.getElementById('toastContainer'),
   };
@@ -194,22 +201,33 @@
     document.body.removeChild(textArea);
   }
 
-  function getAuthHeaders() {
-    return {
+  function getAuthHeaders(includeSync = false) {
+    const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${state.adminSecret}`,
       'x-admin-secret': state.adminSecret,
     };
+
+    if (includeSync) {
+      const savedLocal = localStorage.getItem('hwid_local_db');
+      if (savedLocal) {
+        try {
+          headers['x-sync-database'] = btoa(unescape(encodeURIComponent(savedLocal)));
+        } catch (e) {}
+      }
+    }
+
+    return headers;
   }
 
   // --------------------------------------------------------------------------
   // API Calls
   // --------------------------------------------------------------------------
 
-  async function fetchHWIDs() {
+  async function fetchHWIDs(silent = false) {
     try {
       const res = await fetch('/api/hwids', {
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(true),
       });
 
       if (res.status === 401) {
@@ -227,10 +245,70 @@
         state.hwids = responseData.data || [];
         updateStats(responseData.stats);
         applyFilterAndRender();
+
+        // Update Storage Status Indicator
+        if (elements.storageStatusText && responseData.storageType) {
+          const type = responseData.storageType;
+          if (type.includes('Upstash') || type.includes('KV') || type.includes('Gist') || type.includes('JSONBin')) {
+            elements.storageStatusText.textContent = `🟢 Cloud DB: ${type}`;
+            elements.storageStatusBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+            elements.storageStatusBadge.style.color = 'var(--accent-emerald)';
+          } else {
+            elements.storageStatusText.textContent = `🟡 Ephemeral (Setup Cloud DB)`;
+            elements.storageStatusBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+            elements.storageStatusBadge.style.color = 'var(--accent-amber)';
+          }
+        }
+
+        // Keep a local copy in browser localStorage
+        if (state.hwids.length > 0) {
+          localStorage.setItem('hwid_local_db', JSON.stringify(state.hwids));
+        }
+
+        if (!silent && responseData.storageType && !responseData.storageType.includes('Upstash') && !responseData.storageType.includes('KV')) {
+          // Check if server only has default data but browser has more
+          const localCache = localStorage.getItem('hwid_local_db');
+          if (localCache) {
+            try {
+              const parsed = JSON.parse(localCache);
+              if (parsed.length > state.hwids.length) {
+                console.log('Restoring records from browser cache to serverless container...');
+                forceSyncToServer(true);
+              }
+            } catch (e) {}
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching HWIDs:', error);
-      showToast('Failed to load HWIDs: ' + error.message, 'error');
+      if (!silent) showToast('Failed to load HWIDs: ' + error.message, 'error');
+    }
+  }
+
+  async function forceSyncToServer(silent = false) {
+    const savedLocal = localStorage.getItem('hwid_local_db');
+    if (!savedLocal) {
+      if (!silent) showToast('No local database found to sync.', 'info');
+      return;
+    }
+
+    try {
+      const records = JSON.parse(savedLocal);
+      const res = await fetch('/api/hwids', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ action: 'sync', records }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        if (!silent) showToast(`Synced ${records.length} user(s) to server & raw text!`, 'success');
+        fetchHWIDs(true);
+      } else {
+        if (!silent) showToast(json.message || 'Sync failed', 'error');
+      }
+    } catch (e) {
+      if (!silent) showToast('Error syncing: ' + e.message, 'error');
     }
   }
 
@@ -727,6 +805,19 @@
       });
     }
 
+    // Cloud Storage Modal & Sync
+    if (elements.storageStatusBadge) {
+      elements.storageStatusBadge.addEventListener('click', () => openModal(elements.cloudStorageModal));
+    }
+
+    if (elements.syncDbBtn) {
+      elements.syncDbBtn.addEventListener('click', () => forceSyncToServer());
+    }
+
+    if (elements.closeCloudStorageBtn) {
+      elements.closeCloudStorageBtn.addEventListener('click', () => closeModal(elements.cloudStorageModal));
+    }
+
     // Auth / Settings Modal
     elements.openSettingsBtn.addEventListener('click', () => {
       elements.adminSecretInput.value = state.adminSecret;
@@ -764,6 +855,7 @@
     toggleStatus: (id, newStatus) => {
       updateHWID({ id, status: newStatus });
     },
+    forceSyncToServer: (silent) => forceSyncToServer(silent),
     openEdit: (id) => {
       const item = state.hwids.find((r) => r.id === id);
       if (!item) return;

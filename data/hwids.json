@@ -1,11 +1,24 @@
 [
   {
+    "id": "hwid_1787076054687",
+    "name": "Vercel_Permanent_Test",
+    "hwid": "7777-8888-9999-0000",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-18T18:00:54.693421Z",
+    "notes": "",
+    "isExpired": false,
+    "effectiveStatus": "active"
+  },
+  {
     "id": "hwid_1787075200767",
     "name": "awdvaw",
     "hwid": "AWVD-AWVD-AWVD-AWDV",
     "status": "active",
     "expiresAt": null,
     "createdAt": "2026-08-18T17:46:40.767228Z",
-    "notes": ""
+    "notes": "",
+    "isExpired": false,
+    "effectiveStatus": "active"
   }
 ]

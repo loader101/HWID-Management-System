@@ -163,6 +163,7 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
             response_data = {
                 'success': True,
                 'data': processed,
+                'storageType': 'Local Server (Dev)',
                 'stats': {
                     'total': len(records),
                     'active': active_count,
@@ -317,6 +318,15 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'message': 'Name and HWID are required'}).encode('utf-8'))
+            # Full Sync
+            if body.get('action') == 'sync' and isinstance(body.get('records'), list):
+                records = body.get('records')
+                save_hwids(records)
+                self.send_response(200)
+                self.send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': True, 'message': f'Synced {len(records)} records'}).encode('utf-8'))
                 return
 
             # Check duplicate

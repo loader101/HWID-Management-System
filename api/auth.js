@@ -1,9 +1,9 @@
-const { ADMIN_SECRET } = require('./_storage');
+const { ADMIN_SECRET, parseJsonBody } = require('./_storage');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -14,7 +14,8 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { password } = req.body || {};
+    const body = await parseJsonBody(req);
+    const password = body.password || (req.query && req.query.password);
 
     if (!password) {
       return res.status(400).json({ success: false, message: 'Admin password is required' });
@@ -30,6 +31,6 @@ module.exports = async function handler(req, res) {
       return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
     }
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Server authentication error' });
+    return res.status(500).json({ success: false, message: 'Server authentication error: ' + error.message });
   }
 };

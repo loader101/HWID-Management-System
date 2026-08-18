@@ -1,4 +1,4 @@
-const { getAllHWIDs, isExpired, formatHWID } = require('./_storage');
+const { getAllHWIDs, isExpired, formatHWID, parseJsonBody } = require('./_storage');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,7 +9,8 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const queryHWID = req.query.hwid || (req.body && req.body.hwid);
+  const body = await parseJsonBody(req);
+  const queryHWID = (req.query && req.query.hwid) || body.hwid;
 
   if (!queryHWID) {
     return res.status(400).json({
