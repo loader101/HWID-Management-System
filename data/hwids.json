@@ -1,14 +1,24 @@
 [
   {
+    "id": "hwid_1787080665833",
+    "name": "Expired_Tester",
+    "hwid": "7777-7777-7777-7777",
+    "status": "active",
+    "expiresAt": "2026-08-17T19:17:23.806964Z",
+    "createdAt": "2026-08-18T19:17:45.833467Z",
+    "notes": ""
+  },
+  {
     "id": "hwid_1787079409717",
     "name": "awdawdawd",
     "hwid": "4271-4243-4442-4444",
     "status": "active",
-    "expiresAt": null,
+    "expiresAt": "2026-08-18T19:09:00.000Z",
     "createdAt": "2026-08-18T18:56:49.718079Z",
     "notes": "",
     "isExpired": false,
-    "effectiveStatus": "active"
+    "effectiveStatus": "active",
+    "updatedAt": "2026-08-18T19:07:19.668492Z"
   },
   {
     "id": "hwid_1787079220279",

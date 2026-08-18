@@ -9,6 +9,7 @@ class cHardwareId : public Singleton<cHardwareId>
 {
 private:
 	std::string matchedName = "";
+	std::string hwidStatus = "Unauthorized";
 
 public:
 	std::string GetHWIDList(const std::string& url);
@@ -26,6 +27,8 @@ public:
 	bool CheckHWIDLock();
 
 	std::string GetMatchedName();
+	std::string GetHWIDStatus();
+	bool IsExpired();
 };
 
 #endif

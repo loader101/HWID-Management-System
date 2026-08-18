@@ -1,4 +1,5 @@
 #include "HardwareId.hpp"
+#include "DiscordApi.hpp"
 
 std::string cHardwareId::GetHWIDList(const std::string& url)
 {
@@ -247,7 +248,8 @@ std::string cHardwareId::GetSerial()
 
 bool cHardwareId::CheckHWIDLock()
 {
-	this->matchedName = ""; // Reset matched name
+	this->matchedName = "";
+	this->hwidStatus = "Unauthorized";
 	std::string currentHWID = this->GetSerial();
 
 	if (currentHWID.empty()) {
@@ -268,20 +270,36 @@ bool cHardwareId::CheckHWIDLock()
 	std::string response = this->GetHWIDList(verifyUrl);
 
 	if (response.empty()) {
+		this->hwidStatus = "Connection Failed";
 		return false;
 	}
 
 	// Trim whitespace / newlines / carriage returns
 	response = CUtils::get()->Trim(response);
 
-	// 1. Plain Text Check: "AUTH_OK:Username"
+	// 1. Plain Text Active Check: "AUTH_OK:Username"
 	if (response.rfind("AUTH_OK:", 0) == 0)
 	{
 		this->matchedName = response.substr(8); // Extracts the authorized username
+		this->hwidStatus = "Activated";
 		return true; // License is valid and active!
 	}
 
-	// 2. JSON Fallback Check: {"valid":true,"user":"Username"}
+	// 2. Expired License Check: "AUTH_DENIED:Expired"
+	if (response.rfind("AUTH_DENIED:Expired", 0) == 0 || response.find("\"status\":\"expired\"") != std::string::npos)
+	{
+		this->hwidStatus = "Expired";
+		return false; // ❌ 100% BLOCKED
+	}
+
+	// 3. Suspended License Check: "AUTH_DENIED:Suspended"
+	if (response.rfind("AUTH_DENIED:Suspended", 0) == 0 || response.find("\"status\":\"suspended\"") != std::string::npos)
+	{
+		this->hwidStatus = "Suspended";
+		return false; // ❌ 100% BLOCKED
+	}
+
+	// 4. JSON Fallback Check: {"valid":true,"user":"Username"}
 	if (response.find("\"valid\":true") != std::string::npos || response.find("\"valid\": true") != std::string::npos)
 	{
 		size_t userPos = response.find("\"user\":");
@@ -294,14 +312,25 @@ bool cHardwareId::CheckHWIDLock()
 				this->matchedName = response.substr(startQuote + 1, endQuote - startQuote - 1);
 			}
 		}
+		this->hwidStatus = "Activated";
 		return true;
 	}
 
-	// Response is "AUTH_DENIED:Suspended", "AUTH_DENIED:Expired", or "AUTH_FAILED:Not Registered"
+	this->hwidStatus = "Not Registered";
 	return false;
 }
 
 std::string cHardwareId::GetMatchedName()
 {
 	return this->matchedName.empty() ? "Unknown User" : this->matchedName;
+}
+
+std::string cHardwareId::GetHWIDStatus()
+{
+	return this->hwidStatus.empty() ? "Unauthorized" : this->hwidStatus;
+}
+
+bool cHardwareId::IsExpired()
+{
+	return this->hwidStatus == "Expired";
 }

@@ -616,6 +616,20 @@
     modal.classList.remove('active');
   }
 
+  // Helper to format Date object into local HTML datetime-local string (YYYY-MM-DDTHH:MM)
+  function formatToLocalDateTimeInput(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
   // Setup Expiry Preset Buttons
   function setupPresetButtons(containerSelector, targetInput) {
     const container = document.querySelector(containerSelector);
@@ -631,13 +645,13 @@
           targetInput.value = '';
         } else if (preset === '1d') {
           const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          targetInput.value = d.toISOString().slice(0, 16);
+          targetInput.value = formatToLocalDateTimeInput(d);
         } else if (preset === '7d') {
           const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-          targetInput.value = d.toISOString().slice(0, 16);
+          targetInput.value = formatToLocalDateTimeInput(d);
         } else if (preset === '30d') {
           const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-          targetInput.value = d.toISOString().slice(0, 16);
+          targetInput.value = formatToLocalDateTimeInput(d);
         }
       });
     });
@@ -897,7 +911,7 @@
       elements.editHwidInput.value = item.hwid;
       elements.editStatusSelect.value = item.status || 'active';
       elements.editNotesInput.value = item.notes || '';
-      elements.editExpiryInput.value = item.expiresAt ? new Date(item.expiresAt).toISOString().slice(0, 16) : '';
+      elements.editExpiryInput.value = item.expiresAt ? formatToLocalDateTimeInput(item.expiresAt) : '';
 
       openModal(elements.editModal);
     },
