@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "id": "hwid_1787077830388",
+    "name": "Raw_Txt_User",
+    "hwid": "9999-8888-7777-6666",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-18T18:30:30.393605Z",
+    "notes": ""
+  },
+  {
+    "id": "hwid_init_1",
+    "name": "Admin_Jaymian",
+    "hwid": "4944-4444-4444-4444",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-19T00:00:00.000Z",
+    "notes": "Owner / Administrator Access"
+  },
+  {
+    "id": "hwid_init_2",
+    "name": "VipUser_Juan",
+    "hwid": "61A3-8B54-96B2-7777",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-19T00:00:00.000Z",
+    "notes": "VIP Access"
+  }
+]

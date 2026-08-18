@@ -2,13 +2,40 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
+// Statically bundle default seed data so Vercel never misses data/hwids.json
+let defaultSeedData = [
+  {
+    id: "hwid_init_1",
+    name: "Admin_Jaymian",
+    hwid: "4944-4444-4444-4444",
+    status: "active",
+    expiresAt: null,
+    createdAt: "2026-08-19T00:00:00.000Z",
+    notes: "Owner / Administrator Access"
+  },
+  {
+    id: "hwid_init_2",
+    name: "VipUser_Juan",
+    hwid: "61A3-8B54-96B2-7777",
+    status: "active",
+    expiresAt: null,
+    createdAt: "2026-08-19T00:00:00.000Z",
+    notes: "VIP Access"
+  }
+];
+
+try {
+  const loaded = require('../data/hwids.json');
+  if (Array.isArray(loaded) && loaded.length > 0) {
+    defaultSeedData = loaded;
+  }
+} catch (e) {}
+
 // Environment Variables for Cloud Persistence
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GIST_ID = process.env.GIST_ID;
-const JSONBIN_KEY = process.env.JSONBIN_API_KEY;
-const JSONBIN_ID = process.env.JSONBIN_BIN_ID;
 
 const KV_KEY = 'HWID_DATABASE';
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin123';
@@ -16,19 +43,18 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin123';
 const LOCAL_DATA_FILE = path.join(process.cwd(), 'data', 'hwids.json');
 const TMP_DATA_FILE = path.join('/tmp', 'hwids.json');
 
-// In-memory fallback across warm serverless invocations
+// In-memory cache across warm serverless invocations
 let memoryCache = null;
 
 // Determine storage type
 function getStorageType() {
   if (KV_URL && KV_TOKEN) return 'Upstash Redis / Vercel KV';
   if (GITHUB_TOKEN && GIST_ID) return 'GitHub Gist';
-  if (JSONBIN_KEY && JSONBIN_ID) return 'JSONBin.io';
   return 'Local / Ephemeral (Vercel Serverless)';
 }
 
 function hasCloudPersistence() {
-  return !!((KV_URL && KV_TOKEN) || (GITHUB_TOKEN && GIST_ID) || (JSONBIN_KEY && JSONBIN_ID));
+  return !!((KV_URL && KV_TOKEN) || (GITHUB_TOKEN && GIST_ID));
 }
 
 // --------------------------------------------------------------------------
@@ -44,7 +70,8 @@ async function getFromKV() {
     if (!res.ok) return null;
     const data = await res.json();
     if (data && data.result) {
-      return typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+      const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
+      if (Array.isArray(parsed)) return parsed;
     }
     return null;
   } catch (err) {
@@ -146,30 +173,14 @@ function readFromFile() {
   try {
     if (fs.existsSync(LOCAL_DATA_FILE)) {
       const content = fs.readFileSync(LOCAL_DATA_FILE, 'utf8');
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
     }
   } catch (e) {}
 
-  return [
-    {
-      id: "hwid_init_1",
-      name: "Admin_Jaymian",
-      hwid: "4944-4444-4444-4444",
-      status: "active",
-      expiresAt: null,
-      createdAt: "2026-08-19T00:00:00.000Z",
-      notes: "Owner / Administrator Access"
-    },
-    {
-      id: "hwid_init_2",
-      name: "VipUser_Juan",
-      hwid: "61A3-8B54-96B2-7777",
-      status: "active",
-      expiresAt: null,
-      createdAt: "2026-08-19T00:00:00.000Z",
-      notes: "VIP Access"
-    }
-  ];
+  return defaultSeedData;
 }
 
 function saveToFile(records) {
@@ -199,12 +210,12 @@ async function getAllHWIDs() {
   // 1. Check Upstash / Vercel KV
   if (KV_URL && KV_TOKEN) {
     const kvData = await getFromKV();
-    if (kvData && Array.isArray(kvData)) {
+    if (kvData && Array.isArray(kvData) && kvData.length > 0) {
       memoryCache = kvData;
       saveToFile(kvData);
       return kvData;
     }
-    // If KV is newly linked and empty, initialize it with current data
+    // If KV is newly linked and empty, initialize it with default data
     const local = readFromFile();
     if (local && local.length > 0) {
       await saveToKV(local);
@@ -216,14 +227,14 @@ async function getAllHWIDs() {
   // 2. Check GitHub Gist
   if (GITHUB_TOKEN && GIST_ID) {
     const gistData = await getFromGist();
-    if (gistData && Array.isArray(gistData)) {
+    if (gistData && Array.isArray(gistData) && gistData.length > 0) {
       memoryCache = gistData;
       saveToFile(gistData);
       return gistData;
     }
   }
 
-  // 3. Fallback to /tmp / local file / memory cache
+  // 3. Fallback to /tmp / local file / memory cache / defaultSeedData
   const data = readFromFile();
   memoryCache = data;
   return data;
@@ -243,27 +254,38 @@ async function saveAllHWIDs(records) {
 
 function isExpired(expiresAt) {
   if (!expiresAt) return false;
-  const expiry = new Date(expiresAt);
-  return expiry.getTime() < Date.now();
+  try {
+    const expiry = new Date(expiresAt);
+    const expTime = expiry.getTime();
+    if (isNaN(expTime)) return false;
+    return expTime < Date.now();
+  } catch (e) {
+    return false;
+  }
 }
 
 function formatHWID(hwid) {
   if (!hwid) return '';
-  return hwid.trim().toUpperCase();
+  return String(hwid).trim().toUpperCase();
 }
 
 async function getActiveRawList() {
   const records = await getAllHWIDs();
   const activeLines = [];
 
-  for (const item of records) {
-    const status = (item.status || 'active').toLowerCase();
-    const expired = isExpired(item.expiresAt);
+  if (Array.isArray(records)) {
+    for (const item of records) {
+      if (!item) continue;
+      const status = (item.status || 'active').toLowerCase();
+      const expired = isExpired(item.expiresAt);
 
-    if (status === 'active' && !expired && item.name && item.hwid) {
-      const cleanName = item.name.trim();
-      const cleanHWID = formatHWID(item.hwid);
-      activeLines.push(`${cleanName}:${cleanHWID}`);
+      if (status === 'active' && !expired && item.name && item.hwid) {
+        const cleanName = String(item.name).trim();
+        const cleanHWID = formatHWID(item.hwid);
+        if (cleanName && cleanHWID) {
+          activeLines.push(`${cleanName}:${cleanHWID}`);
+        }
+      }
     }
   }
 
@@ -315,6 +337,7 @@ function getQueryParams(req) {
 
 module.exports = {
   ADMIN_SECRET,
+  defaultSeedData,
   getStorageType,
   hasCloudPersistence,
   getAllHWIDs,

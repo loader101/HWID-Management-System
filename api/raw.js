@@ -1,4 +1,4 @@
-const { getActiveRawList } = require('./_storage');
+const { getActiveRawList, defaultSeedData } = require('./_storage');
 
 module.exports = async function handler(req, res) {
   // Set CORS headers
@@ -15,7 +15,17 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const rawText = await getActiveRawList();
+    let rawText = await getActiveRawList();
+
+    // Fallback if empty
+    if (!rawText || !rawText.trim()) {
+      if (Array.isArray(defaultSeedData) && defaultSeedData.length > 0) {
+        rawText = defaultSeedData
+          .filter(d => d.status === 'active')
+          .map(d => `${d.name}:${d.hwid}`)
+          .join('\n');
+      }
+    }
     
     // Aggressive anti-caching headers for Vercel Edge & Cloudflare CDN
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -24,9 +34,12 @@ module.exports = async function handler(req, res) {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    return res.status(200).send(rawText);
+    return res.status(200).send(rawText || '');
   } catch (error) {
     console.error('Error fetching raw HWID list:', error);
-    return res.status(500).send('');
+    // Even in error, return default seed lines
+    const fallbackText = defaultSeedData.map(d => `${d.name}:${d.hwid}`).join('\n');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return res.status(200).send(fallbackText);
   }
 };
