@@ -5,6 +5,24 @@ const url = require('url');
 // Statically bundle default seed data so Vercel never misses data/hwids.json
 let defaultSeedData = [
   {
+    id: "hwid_1787079409717",
+    name: "xol",
+    hwid: "4271-4243-4442-4444",
+    status: "active",
+    expiresAt: null,
+    createdAt: "2026-08-18T18:56:49.718Z",
+    notes: "Main Developer / Owner HWID"
+  },
+  {
+    id: "hwid_1787081242354",
+    name: "xxx",
+    hwid: "70F8-339D-6DD6-870D",
+    status: "active",
+    expiresAt: null,
+    createdAt: "2026-08-18T19:27:22.354Z",
+    notes: "VIP User"
+  },
+  {
     id: "hwid_init_1",
     name: "Admin_Jaymian",
     hwid: "4944-4444-4444-4444",
