@@ -256,37 +256,32 @@ std::string cHardwareId::GetSerial()
 bool cHardwareId::CheckHWIDLock()
 {
 	this->matchedName = ""; // Reset matched name
+	std::string currentHWID = this->GetSerial();
 
-	// Vercel HWID Management Endpoint (e.g. https://your-project.vercel.app/api/raw or http://localhost:3000/api/raw)
-	std::string hwidListRaw = this->GetHWIDList("https://your-domain.vercel.app/api/raw");
-
-	if (hwidListRaw.empty()) {
+	if (currentHWID.empty()) {
 		return false;
 	}
 
-	std::istringstream iss(hwidListRaw);
-	std::string line;
-	std::string currentHWID = this->GetSerial();
+	// Direct Website API Verification (No raw.txt needed!)
+	// Example: https://hwid-management-system.vercel.app/api/verify?hwid=XXXX-XXXX-XXXX-XXXX
+	std::string verifyUrl = "https://hwid-management-system.vercel.app/api/verify?hwid=" + currentHWID;
+	std::string response = this->GetHWIDList(verifyUrl);
 
-	while (std::getline(iss, line)) {
-		if (line.empty()) continue;
-
-		size_t delimiter = line.find(':');
-		if (delimiter != std::string::npos) {
-			std::string name = line.substr(0, delimiter);
-			std::string hwid = line.substr(delimiter + 1);
-
-			name = CUtils::get()->Trim(name);
-			hwid = CUtils::get()->Trim(hwid);
-
-			if (hwid == currentHWID) {
-				this->matchedName = name;
-				return true;
-			}
-		}
+	if (response.empty()) {
+		return false;
 	}
 
-	return false; // No match found
+	response = CUtils::get()->Trim(response);
+
+	// Server returns "AUTH_OK:Username" when active and authorized
+	if (response.rfind("AUTH_OK:", 0) == 0)
+	{
+		this->matchedName = response.substr(8); // Extracts the authorized username
+		return true; // License is valid and active!
+	}
+
+	// Response is "AUTH_DENIED:Suspended", "AUTH_DENIED:Expired", or "AUTH_FAILED:Not Registered"
+	return false;
 }
 
 std::string cHardwareId::GetMatchedName()

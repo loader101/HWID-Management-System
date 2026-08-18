@@ -573,41 +573,36 @@
   }
 
   function updateCppCodeSnippet() {
-    const rawUrl = getRawUrl();
+    const origin = window.location.origin;
+    const verifyUrl = `${origin}/api/verify?hwid=`;
     const code = `bool cHardwareId::CheckHWIDLock()
 {
     this->matchedName = ""; // Reset matched name
+    std::string currentHWID = this->GetSerial();
 
-    // Fetches live active users from your Vercel HWID Management System
-    std::string hwidListRaw = this->GetHWIDList("${rawUrl}");
-
-    if (hwidListRaw.empty()) {
+    if (currentHWID.empty()) {
         return false;
     }
 
-    std::istringstream iss(hwidListRaw);
-    std::string line;
-    std::string currentHWID = this->GetSerial();
+    // Direct Website API Verification (100% Secure & Fast)
+    std::string verifyUrl = "${verifyUrl}" + currentHWID;
+    std::string response = this->GetHWIDList(verifyUrl);
 
-    while (std::getline(iss, line)) {
-        if (line.empty()) continue;
-
-        size_t delimiter = line.find(':');
-        if (delimiter != std::string::npos) {
-            std::string name = line.substr(0, delimiter);
-            std::string hwid = line.substr(delimiter + 1);
-
-            name = CUtils::get()->Trim(name);
-            hwid = CUtils::get()->Trim(hwid);
-
-            if (hwid == currentHWID) {
-                this->matchedName = name;
-                return true;
-            }
-        }
+    if (response.empty()) {
+        return false;
     }
 
-    return false; // No match found
+    response = CUtils::get()->Trim(response);
+
+    // Server returns "AUTH_OK:Username" if active & authorized
+    if (response.rfind("AUTH_OK:", 0) == 0)
+    {
+        this->matchedName = response.substr(8); // Extracts the authorized username
+        return true; // License is valid!
+    }
+
+    // Returns false if Suspended, Expired, or Not Registered
+    return false;
 }`;
     elements.cppCodeSnippet.textContent = code;
   }

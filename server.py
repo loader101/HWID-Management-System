@@ -179,50 +179,78 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(response_data).encode('utf-8'))
             return
 
-        # 3. Fast verify endpoint /api/verify?hwid=XXXX
+        # 3. Direct verify endpoint /api/verify?hwid=XXXX
         if path == '/api/verify':
             target_hwid = query.get('hwid', [''])[0].strip().upper()
+            wants_json = query.get('format', [''])[0] == 'json' or 'application/json' in self.headers.get('Accept', '')
+
             if not target_hwid:
-                self.send_response(400)
+                self.send_response(200 if not wants_json else 400)
                 self.send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'valid': False, 'message': 'hwid param required'}).encode('utf-8'))
+                if wants_json:
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'valid': False, 'message': 'hwid param required'}).encode('utf-8'))
+                else:
+                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(b'AUTH_FAILED:Missing HWID Parameter')
                 return
 
             records = read_hwids()
             found = next((r for r in records if (r.get('hwid') or '').strip().upper() == target_hwid), None)
 
             if not found:
-                self.send_response(404)
+                self.send_response(200 if not wants_json else 404)
                 self.send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'valid': False, 'message': 'HWID not found'}).encode('utf-8'))
+                if wants_json:
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'valid': False, 'message': 'HWID not found'}).encode('utf-8'))
+                else:
+                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(b'AUTH_FAILED:Not Registered')
                 return
 
             status = found.get('status', 'active')
             if status == 'suspended':
-                self.send_response(403)
+                self.send_response(200 if not wants_json else 403)
                 self.send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'valid': False, 'status': 'suspended', 'user': found.get('name')}).encode('utf-8'))
+                if wants_json:
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'valid': False, 'status': 'suspended', 'user': found.get('name')}).encode('utf-8'))
+                else:
+                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(b'AUTH_DENIED:Suspended')
                 return
 
             if is_expired(found.get('expiresAt')):
-                self.send_response(403)
+                self.send_response(200 if not wants_json else 403)
                 self.send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'valid': False, 'status': 'expired', 'user': found.get('name')}).encode('utf-8'))
+                if wants_json:
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'valid': False, 'status': 'expired', 'user': found.get('name')}).encode('utf-8'))
+                else:
+                    self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                    self.end_headers()
+                    self.wfile.write(b'AUTH_DENIED:Expired')
                 return
 
+            user_name = (found.get('name') or 'User').strip()
             self.send_response(200)
             self.send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'valid': True, 'status': 'active', 'user': found.get('name'), 'hwid': found.get('hwid')}).encode('utf-8'))
+            if wants_json:
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'valid': True, 'status': 'active', 'user': user_name, 'hwid': found.get('hwid')}).encode('utf-8'))
+            else:
+                self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(f'AUTH_OK:{user_name}'.encode('utf-8'))
             return
 
         # 4. Static Files from public/
