@@ -10,7 +10,69 @@
 </head>
 <body>
 
-  <div class="app-container">
+  <!-- =====================================================================
+       Administrator PIN Lock Screen Overlay
+       ===================================================================== -->
+  <div id="adminLockScreen" class="admin-lock-screen">
+    <div class="lock-card">
+      <div class="lock-shield-icon">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      
+      <div class="lock-badge">🔒 RESTRICTED ACCESS</div>
+      <h1 class="lock-title">HWID Control Center</h1>
+      <p class="lock-subtitle">Please log in administrator pin</p>
+
+      <form id="pinLoginForm" class="pin-form" autocomplete="off">
+        <div class="pin-input-container">
+          <input 
+            type="password" 
+            id="adminPinInput" 
+            class="pin-input" 
+            maxlength="8" 
+            placeholder="••••" 
+            inputmode="numeric" 
+            autofocus 
+            autocomplete="off"
+          />
+          <button type="button" id="togglePinVisibilityBtn" class="btn-toggle-eye" title="Show/Hide PIN">
+            👁️
+          </button>
+        </div>
+
+        <!-- Keypad for 1-click or touch entry -->
+        <div class="keypad-grid">
+          <button type="button" class="keypad-btn" data-key="1">1</button>
+          <button type="button" class="keypad-btn" data-key="2">2</button>
+          <button type="button" class="keypad-btn" data-key="3">3</button>
+          <button type="button" class="keypad-btn" data-key="4">4</button>
+          <button type="button" class="keypad-btn" data-key="5">5</button>
+          <button type="button" class="keypad-btn" data-key="6">6</button>
+          <button type="button" class="keypad-btn" data-key="7">7</button>
+          <button type="button" class="keypad-btn" data-key="8">8</button>
+          <button type="button" class="keypad-btn" data-key="9">9</button>
+          <button type="button" class="keypad-btn btn-clear" data-action="clear">C</button>
+          <button type="button" class="keypad-btn" data-key="0">0</button>
+          <button type="button" class="keypad-btn btn-backspace" data-action="back">⌫</button>
+        </div>
+
+        <div id="pinErrorMsg" class="pin-error-msg"></div>
+
+        <button type="submit" id="unlockBtn" class="btn btn-primary btn-block btn-lg" style="margin-top: 0.5rem; width: 100%;">
+          <span>🔓 UNLOCK ACCESS</span>
+        </button>
+      </form>
+      
+      <div class="lock-footer">
+        <span>HardwareID Management &bull; Administrator Authorization</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container" id="mainAppContainer" style="display: none;">
     
     <!-- Top Header -->
     <header class="app-header">
@@ -43,6 +105,9 @@
         </button>
         <button onclick="window.HWIDApp.exportBackup()" class="btn btn-secondary btn-sm" title="Backup all HWIDs as JSON">
           💾 Backup
+        </button>
+        <button id="lockDashboardBtn" class="btn btn-danger btn-sm" title="Lock Dashboard and Require Administrator PIN">
+          🔒 Lock PIN
         </button>
       </div>
     </header>

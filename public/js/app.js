@@ -12,12 +12,24 @@
     filteredHwids: [],
     searchQuery: '',
     statusFilter: 'all',
-    adminSecret: localStorage.getItem('hwid_admin_secret') || 'admin123',
+    adminSecret: '0909',
     selectedItem: null,
   };
 
+  const ADMIN_PIN = '0909';
+
   // DOM Elements
   const elements = {
+    // Admin PIN Lock Screen
+    adminLockScreen: document.getElementById('adminLockScreen'),
+    mainAppContainer: document.getElementById('mainAppContainer'),
+    pinLoginForm: document.getElementById('pinLoginForm'),
+    adminPinInput: document.getElementById('adminPinInput'),
+    togglePinVisibilityBtn: document.getElementById('togglePinVisibilityBtn'),
+    pinErrorMsg: document.getElementById('pinErrorMsg'),
+    unlockBtn: document.getElementById('unlockBtn'),
+    lockDashboardBtn: document.getElementById('lockDashboardBtn'),
+
     // Stats
     statActive: document.getElementById('statActive'),
     statTotal: document.getElementById('statTotal'),
@@ -892,6 +904,121 @@
   }
 
   // --------------------------------------------------------------------------
+  // Administrator PIN Security Controls
+  // --------------------------------------------------------------------------
+
+  function unlockDashboard() {
+    if (elements.adminLockScreen) {
+      elements.adminLockScreen.classList.add('hidden');
+    }
+    if (elements.mainAppContainer) {
+      elements.mainAppContainer.style.display = 'block';
+    }
+    state.adminSecret = ADMIN_PIN;
+    fetchHWIDs();
+  }
+
+  function lockDashboard() {
+    sessionStorage.removeItem('admin_pin_authenticated');
+    if (elements.adminLockScreen) {
+      elements.adminLockScreen.classList.remove('hidden');
+    }
+    if (elements.mainAppContainer) {
+      elements.mainAppContainer.style.display = 'none';
+    }
+    if (elements.adminPinInput) {
+      elements.adminPinInput.value = '';
+      setTimeout(() => elements.adminPinInput.focus(), 100);
+    }
+    if (elements.pinErrorMsg) {
+      elements.pinErrorMsg.textContent = '';
+    }
+  }
+
+  function handlePinSubmit(e) {
+    if (e) e.preventDefault();
+    const pin = (elements.adminPinInput ? elements.adminPinInput.value : '').trim();
+    if (pin === ADMIN_PIN) {
+      sessionStorage.setItem('admin_pin_authenticated', ADMIN_PIN);
+      showToast('Administrator PIN Verified. Access Granted!', 'success');
+      unlockDashboard();
+    } else {
+      if (elements.pinErrorMsg) {
+        elements.pinErrorMsg.textContent = '❌ Please log in administrator pin';
+      }
+      if (elements.pinLoginForm) {
+        elements.pinLoginForm.classList.remove('shake-error');
+        void elements.pinLoginForm.offsetWidth; // trigger reflow
+        elements.pinLoginForm.classList.add('shake-error');
+      }
+      if (elements.adminPinInput) {
+        elements.adminPinInput.value = '';
+        elements.adminPinInput.focus();
+      }
+    }
+  }
+
+  function initPinLock() {
+    const savedPin = sessionStorage.getItem('admin_pin_authenticated');
+    if (savedPin === ADMIN_PIN) {
+      unlockDashboard();
+    } else {
+      lockDashboard();
+    }
+
+    if (elements.pinLoginForm) {
+      elements.pinLoginForm.addEventListener('submit', handlePinSubmit);
+    }
+
+    if (elements.adminPinInput) {
+      elements.adminPinInput.addEventListener('input', () => {
+        if (elements.adminPinInput.value.length === 4) {
+          handlePinSubmit();
+        }
+      });
+    }
+
+    if (elements.togglePinVisibilityBtn) {
+      elements.togglePinVisibilityBtn.addEventListener('click', () => {
+        if (!elements.adminPinInput) return;
+        const isPassword = elements.adminPinInput.type === 'password';
+        elements.adminPinInput.type = isPassword ? 'text' : 'password';
+        elements.togglePinVisibilityBtn.textContent = isPassword ? '🔒' : '👁️';
+      });
+    }
+
+    // Keypad button clicks
+    document.querySelectorAll('.keypad-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!elements.adminPinInput) return;
+        const key = btn.getAttribute('data-key');
+        const action = btn.getAttribute('data-action');
+
+        if (key !== null) {
+          if (elements.adminPinInput.value.length < 8) {
+            elements.adminPinInput.value += key;
+            if (elements.adminPinInput.value.length === 4) {
+              handlePinSubmit();
+            }
+          }
+        } else if (action === 'clear') {
+          elements.adminPinInput.value = '';
+          if (elements.pinErrorMsg) elements.pinErrorMsg.textContent = '';
+        } else if (action === 'back') {
+          elements.adminPinInput.value = elements.adminPinInput.value.slice(0, -1);
+        }
+      });
+    });
+
+    if (elements.lockDashboardBtn) {
+      elements.lockDashboardBtn.addEventListener('click', () => {
+        lockDashboard();
+        showToast('Dashboard Locked', 'info');
+      });
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // Global Exposure for inline HTML handlers
   // --------------------------------------------------------------------------
 
@@ -945,6 +1072,6 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
-    fetchHWIDs();
+    initPinLock();
   });
 })();

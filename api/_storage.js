@@ -3,51 +3,16 @@ const path = require('path');
 const url = require('url');
 
 // Statically bundle default seed data so Vercel never misses data/hwids.json
-let defaultSeedData = [
-  {
-    id: "hwid_1787079409717",
-    name: "xol",
-    hwid: "4271-4243-4442-4444",
-    status: "active",
-    expiresAt: null,
-    createdAt: "2026-08-18T18:56:49.718Z",
-    notes: "Main Developer / Owner HWID"
-  },
-  {
-    id: "hwid_1787081242354",
-    name: "xxx",
-    hwid: "70F8-339D-6DD6-870D",
-    status: "active",
-    expiresAt: null,
-    createdAt: "2026-08-18T19:27:22.354Z",
-    notes: "VIP User"
-  },
-  {
-    id: "hwid_init_1",
-    name: "Admin_Jaymian",
-    hwid: "4944-4444-4444-4444",
-    status: "active",
-    expiresAt: null,
-    createdAt: "2026-08-19T00:00:00.000Z",
-    notes: "Owner / Administrator Access"
-  },
-  {
-    id: "hwid_init_2",
-    name: "VipUser_Juan",
-    hwid: "61A3-8B54-96B2-7777",
-    status: "active",
-    expiresAt: null,
-    createdAt: "2026-08-19T00:00:00.000Z",
-    notes: "VIP Access"
-  }
-];
+let defaultSeedData = [];
 
 try {
   const loaded = require('../data/hwids.json');
-  if (Array.isArray(loaded) && loaded.length > 0) {
+  if (Array.isArray(loaded)) {
     defaultSeedData = loaded;
   }
-} catch (e) {}
+} catch (e) {
+  defaultSeedData = [];
+}
 
 // Environment Variables for Cloud Persistence
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -56,7 +21,7 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GIST_ID = process.env.GIST_ID;
 
 const KV_KEY = 'HWID_DATABASE';
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'admin123';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '0909';
 
 const LOCAL_DATA_FILE = path.join(process.cwd(), 'data', 'hwids.json');
 const TMP_DATA_FILE = path.join('/tmp', 'hwids.json');
@@ -171,28 +136,28 @@ async function saveToGist(records) {
 // 3. Local File / /tmp Fallback
 // --------------------------------------------------------------------------
 function readFromFile() {
+  // Check memory cache first
+  if (memoryCache !== null && Array.isArray(memoryCache)) {
+    return memoryCache;
+  }
+
   // Check /tmp first (since it holds the latest changes in current serverless container)
   try {
     if (fs.existsSync(TMP_DATA_FILE)) {
       const content = fs.readFileSync(TMP_DATA_FILE, 'utf8');
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
   } catch (e) {}
-
-  // Check memory cache
-  if (memoryCache && Array.isArray(memoryCache) && memoryCache.length > 0) {
-    return memoryCache;
-  }
 
   // Check local data directory
   try {
     if (fs.existsSync(LOCAL_DATA_FILE)) {
       const content = fs.readFileSync(LOCAL_DATA_FILE, 'utf8');
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
