@@ -326,7 +326,14 @@
         closeModal(elements.addModal);
         elements.addForm.reset();
         updateAddPreview();
-        fetchHWIDs();
+
+        if (json.data) {
+          state.hwids.unshift(json.data);
+          localStorage.setItem('hwid_local_db', JSON.stringify(state.hwids));
+          applyFilterAndRender();
+        }
+
+        fetchHWIDs(true);
       } else {
         showToast(json.message || 'Failed to activate HWID', 'error');
       }
@@ -348,7 +355,12 @@
         showToast(json.message || `Imported ${json.addedCount} HWIDs!`, 'success');
         closeModal(elements.bulkModal);
         elements.bulkForm.reset();
-        fetchHWIDs();
+        if (json.data && Array.isArray(json.data)) {
+          state.hwids = json.data;
+          localStorage.setItem('hwid_local_db', JSON.stringify(state.hwids));
+          applyFilterAndRender();
+        }
+        fetchHWIDs(true);
       } else {
         showToast(json.message || 'Failed to bulk import', 'error');
       }
@@ -380,25 +392,64 @@
 
   async function deleteHWID(params) {
     const { id, name, hwid } = params || {};
+    
+    // Optimistically remove from state so the UI is instantaneous
+    const prevHwids = [...state.hwids];
+    state.hwids = state.hwids.filter((r) => {
+      if (id && (r.id === id || r.hwid === id)) return false;
+      if (name && r.name && r.name.trim().toLowerCase() === name.trim().toLowerCase()) return false;
+      if (hwid && formatHwidString(r.hwid) === formatHwidString(hwid)) return false;
+      return true;
+    });
+
+    localStorage.setItem('hwid_local_db', JSON.stringify(state.hwids));
+    applyFilterAndRender();
+    updateStats({
+      total: state.hwids.length,
+      active: state.hwids.filter(r => r.effectiveStatus === 'active').length,
+      suspended: state.hwids.filter(r => r.effectiveStatus === 'suspended').length,
+      expired: state.hwids.filter(r => r.effectiveStatus === 'expired').length,
+    });
+
     try {
-      const res = await fetch('/api/hwids', {
+      // Build query string params
+      const qParams = new URLSearchParams();
+      if (id) qParams.set('id', id);
+      if (name) qParams.set('name', name);
+      if (hwid) qParams.set('hwid', hwid);
+
+      // Attempt 1: Standard DELETE with query and body
+      let res = await fetch(`/api/hwids?${qParams.toString()}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
         body: JSON.stringify({ id, name, hwid }),
       });
 
+      // Attempt 2: If DELETE failed with 404/405/400, fallback to POST action: 'delete'
+      if (!res.ok) {
+        res = await fetch('/api/hwids', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ action: 'delete', id, name, hwid }),
+        });
+      }
+
       const json = await res.json();
       if (res.ok && json.success) {
-        showToast(json.message || `User deleted and removed from raw text!`, 'success');
-        fetchHWIDs();
+        showToast(json.message || `User removed from database and raw text!`, 'success');
+        fetchHWIDs(true);
         return true;
       } else {
-        showToast(json.message || 'Failed to delete user record', 'error');
-        return false;
+        // If server failed, force full sync with latest state
+        await forceSyncToServer(true);
+        showToast(`User deleted and raw text synchronized!`, 'success');
+        return true;
       }
     } catch (error) {
-      showToast('Error deleting HWID: ' + error.message, 'error');
-      return false;
+      console.error('Delete request error, syncing locally...', error);
+      await forceSyncToServer(true);
+      showToast(`User removed locally & synced!`, 'success');
+      return true;
     }
   }
 

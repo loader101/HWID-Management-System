@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 
 // Environment Variables for Cloud Persistence
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -26,13 +27,18 @@ function getStorageType() {
   return 'Local / Ephemeral (Vercel Serverless)';
 }
 
+function hasCloudPersistence() {
+  return !!((KV_URL && KV_TOKEN) || (GITHUB_TOKEN && GIST_ID) || (JSONBIN_KEY && JSONBIN_ID));
+}
+
 // --------------------------------------------------------------------------
 // 1. Upstash Redis / Vercel KV REST
 // --------------------------------------------------------------------------
 async function getFromKV() {
   if (!KV_URL || !KV_TOKEN) return null;
   try {
-    const res = await fetch(`${KV_URL}/get/${KV_KEY}`, {
+    const cleanUrl = KV_URL.replace(/\/+$/, '');
+    const res = await fetch(`${cleanUrl}/get/${KV_KEY}`, {
       headers: { Authorization: `Bearer ${KV_TOKEN}` },
     });
     if (!res.ok) return null;
@@ -50,7 +56,8 @@ async function getFromKV() {
 async function saveToKV(records) {
   if (!KV_URL || !KV_TOKEN) return false;
   try {
-    const res = await fetch(`${KV_URL}/set/${KV_KEY}`, {
+    const cleanUrl = KV_URL.replace(/\/+$/, '');
+    const res = await fetch(`${cleanUrl}/set/${KV_KEY}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${KV_TOKEN}`,
@@ -194,6 +201,7 @@ async function getAllHWIDs() {
     const kvData = await getFromKV();
     if (kvData && Array.isArray(kvData)) {
       memoryCache = kvData;
+      saveToFile(kvData);
       return kvData;
     }
     // If KV is newly linked and empty, initialize it with current data
@@ -210,6 +218,7 @@ async function getAllHWIDs() {
     const gistData = await getFromGist();
     if (gistData && Array.isArray(gistData)) {
       memoryCache = gistData;
+      saveToFile(gistData);
       return gistData;
     }
   }
@@ -280,7 +289,7 @@ async function parseJsonBody(req) {
       data += chunk;
     });
     req.on('end', () => {
-      if (!data) return resolve({});
+      if (!data || !data.trim()) return resolve({});
       try {
         resolve(JSON.parse(data));
       } catch (e) {
@@ -291,13 +300,28 @@ async function parseJsonBody(req) {
   });
 }
 
+// Safely extract query parameters across Node and Vercel environments
+function getQueryParams(req) {
+  if (req.query && typeof req.query === 'object' && Object.keys(req.query).length > 0) {
+    return req.query;
+  }
+  try {
+    const parsed = url.parse(req.url, true);
+    return parsed.query || {};
+  } catch (e) {
+    return {};
+  }
+}
+
 module.exports = {
   ADMIN_SECRET,
   getStorageType,
+  hasCloudPersistence,
   getAllHWIDs,
   saveAllHWIDs,
   isExpired,
   formatHWID,
   getActiveRawList,
   parseJsonBody,
+  getQueryParams,
 };

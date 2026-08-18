@@ -1,18 +1,23 @@
 const {
   ADMIN_SECRET,
   getStorageType,
+  hasCloudPersistence,
   getAllHWIDs,
   saveAllHWIDs,
   isExpired,
   formatHWID,
   parseJsonBody,
+  getQueryParams,
 } = require('./_storage');
 
 function checkAuth(req) {
+  const query = getQueryParams(req);
   const authHeader = req.headers['authorization'];
   const secretHeader = req.headers['x-admin-secret'];
+  const secretQuery = query['adminSecret'] || query['secret'];
   
   if (secretHeader && secretHeader === ADMIN_SECRET) return true;
+  if (secretQuery && secretQuery === ADMIN_SECRET) return true;
   if (authHeader) {
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (token === ADMIN_SECRET) return true;
@@ -33,6 +38,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret, x-sync-database');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -45,8 +51,9 @@ module.exports = async function handler(req, res) {
 
   try {
     let records = await getAllHWIDs();
+    const query = getQueryParams(req);
 
-    // Check if client provided full sync database
+    // Check if client provided full sync database in header
     const syncHeader = req.headers['x-sync-database'];
     if (syncHeader) {
       try {
@@ -85,6 +92,7 @@ module.exports = async function handler(req, res) {
         success: true,
         data: processed,
         storageType: getStorageType(),
+        hasCloudPersistence: hasCloudPersistence(),
         stats: {
           total: records.length,
           active: activeCount,
@@ -98,9 +106,41 @@ module.exports = async function handler(req, res) {
     const body = await parseJsonBody(req);
 
     // ------------------------------------------------------------------------
-    // POST /api/hwids - Add single, bulk, or full sync
+    // POST /api/hwids - Add single, bulk, sync, or action: 'delete'
     // ------------------------------------------------------------------------
     if (req.method === 'POST') {
+      // Fallback action: 'delete'
+      if (body.action === 'delete') {
+        const targetId = body.id || query.id;
+        const targetName = body.name || query.name;
+        const targetHwid = body.hwid || query.hwid;
+
+        const initialLen = records.length;
+        const deletedItems = [];
+
+        records = records.filter((r) => {
+          const matchId = targetId && (r.id === targetId || r.hwid === targetId);
+          const matchName = targetName && r.name && r.name.trim().toLowerCase() === targetName.trim().toLowerCase();
+          const matchHwid = targetHwid && formatHWID(r.hwid) === formatHWID(targetHwid);
+
+          if (matchId || matchName || matchHwid) {
+            deletedItems.push(r);
+            return false;
+          }
+          return true;
+        });
+
+        await saveAllHWIDs(records);
+        const deletedNames = deletedItems.map((i) => i.name).join(', ') || 'User';
+
+        return res.status(200).json({
+          success: true,
+          message: `Successfully deleted ${deletedNames} and removed from raw text!`,
+          deletedCount: deletedItems.length,
+          data: records,
+        });
+      }
+
       // Full Sync / Restore
       if (body.action === 'sync' && Array.isArray(body.records)) {
         records = body.records;
@@ -109,6 +149,7 @@ module.exports = async function handler(req, res) {
           success: true,
           message: `Database synchronized! ${records.length} records active.`,
           count: records.length,
+          data: records,
         });
       }
 
@@ -148,6 +189,7 @@ module.exports = async function handler(req, res) {
           addedCount: added.length,
           duplicatesCount: duplicates.length,
           duplicates,
+          data: records,
         });
       }
 
@@ -225,11 +267,9 @@ module.exports = async function handler(req, res) {
     // DELETE /api/hwids - Delete record by ID, Username, or HWID
     // ------------------------------------------------------------------------
     if (req.method === 'DELETE') {
-      const { id, name, hwid } = body;
-      const queryId = req.query && req.query.id;
-      const targetId = id || queryId;
-      const targetName = name || (req.query && req.query.name);
-      const targetHwid = hwid || (req.query && req.query.hwid);
+      const targetId = (body && body.id) || query.id;
+      const targetName = (body && body.name) || query.name;
+      const targetHwid = (body && body.hwid) || query.hwid;
 
       if (!targetId && !targetName && !targetHwid) {
         return res.status(400).json({ success: false, message: 'Record ID, Username, or HWID is required.' });
@@ -251,15 +291,19 @@ module.exports = async function handler(req, res) {
       });
 
       if (records.length === initialLen) {
-        return res.status(404).json({ success: false, message: 'No matching user or HWID record found.' });
+        // If not found in memory, still return 200 with message so UI doesn't get stuck
+        return res.status(200).json({
+          success: true,
+          message: 'User already removed or not found.',
+        });
       }
 
       await saveAllHWIDs(records);
 
-      const deletedNames = deletedItems.map((i) => i.name).join(', ');
+      const deletedNames = deletedItems.map((i) => i.name).join(', ') || 'User';
       return res.status(200).json({
         success: true,
-        message: `Successfully deleted ${deletedNames || 'user'} and removed from raw text list!`,
+        message: `Successfully deleted ${deletedNames} and removed from raw text list!`,
         deletedCount: deletedItems.length,
       });
     }

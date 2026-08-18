@@ -17,11 +17,12 @@ module.exports = async function handler(req, res) {
   try {
     const rawText = await getActiveRawList();
     
-    // Prevent caching so activations reflect immediately in C++ client
+    // Aggressive anti-caching headers for Vercel Edge & Cloudflare CDN
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
 
     return res.status(200).send(rawText);
   } catch (error) {
