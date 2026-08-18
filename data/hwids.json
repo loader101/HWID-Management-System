@@ -1,12 +1,47 @@
 [
   {
+    "id": "hwid_1787079409717",
+    "name": "awdawdawd",
+    "hwid": "4271-4243-4442-4444",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-18T18:56:49.718079Z",
+    "notes": "",
+    "isExpired": false,
+    "effectiveStatus": "active"
+  },
+  {
+    "id": "hwid_1787079220279",
+    "name": "Direct_API_VIP",
+    "hwid": "9999-1111-2222-3333",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-18T18:53:40.285304Z",
+    "notes": "",
+    "isExpired": false,
+    "effectiveStatus": "active"
+  },
+  {
+    "id": "hwid_1787078935559",
+    "name": "User_Real_PC",
+    "hwid": "1111-2222-3333-4444",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-18T18:48:55.563207Z",
+    "notes": "",
+    "isExpired": false,
+    "effectiveStatus": "active"
+  },
+  {
     "id": "hwid_1787077830388",
     "name": "Raw_Txt_User",
     "hwid": "9999-8888-7777-6666",
     "status": "active",
     "expiresAt": null,
     "createdAt": "2026-08-18T18:30:30.393605Z",
-    "notes": ""
+    "notes": "",
+    "isExpired": false,
+    "effectiveStatus": "active"
   },
   {
     "id": "hwid_init_1",
@@ -15,7 +50,9 @@
     "status": "active",
     "expiresAt": null,
     "createdAt": "2026-08-19T00:00:00.000Z",
-    "notes": "Owner / Administrator Access"
+    "notes": "Owner / Administrator Access",
+    "isExpired": false,
+    "effectiveStatus": "active"
   },
   {
     "id": "hwid_init_2",
@@ -24,6 +61,8 @@
     "status": "active",
     "expiresAt": null,
     "createdAt": "2026-08-19T00:00:00.000Z",
-    "notes": "VIP Access"
+    "notes": "VIP Access",
+    "isExpired": false,
+    "effectiveStatus": "active"
   }
 ]

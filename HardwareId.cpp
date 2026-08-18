@@ -2,22 +2,44 @@
 
 std::string cHardwareId::GetHWIDList(const std::string& url)
 {
-	HINTERNET hInternet = InternetOpen("HWIDChecker", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-	if (!hInternet) return "";
-
-	HINTERNET hFile = InternetOpenUrl(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD, 0);
-	if (!hFile)
+	// 1. Open Internet session
+	HINTERNET hInternet = InternetOpenA("Mozilla/5.0 (Windows NT 10.0; Win64; x64) HWIDClient/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+	if (!hInternet)
 	{
-		InternetCloseHandle(hInternet);
-		return "";
+		hInternet = InternetOpenA("HWIDChecker", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+		if (!hInternet) return "";
 	}
 
-	char buffer[4096];
-	DWORD bytesRead;
-	std::string result;
+	// 2. Detect HTTPS vs HTTP
+	bool isHttps = (url.rfind("https://", 0) == 0);
+	DWORD flags = INTERNET_FLAG_RELOAD | INTERNET_FLAG_DONT_CACHE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_NO_CACHE_WRITE;
 
-	while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead != 0)
+	if (isHttps)
 	{
+		flags |= INTERNET_FLAG_SECURE | INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID;
+	}
+
+	// 3. Open URL
+	HINTERNET hFile = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, flags, 0);
+	if (!hFile)
+	{
+		// Fallback retry with reload only
+		hFile = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD, 0);
+		if (!hFile)
+		{
+			InternetCloseHandle(hInternet);
+			return "";
+		}
+	}
+
+	// 4. Read Response
+	char buffer[4096];
+	DWORD bytesRead = 0;
+	std::string result = "";
+
+	while (InternetReadFile(hFile, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead != 0)
+	{
+		buffer[bytesRead] = '\0';
 		result.append(buffer, bytesRead);
 	}
 
@@ -223,36 +245,6 @@ std::string cHardwareId::GetSerial()
 	return Serial;
 }
 
-//bool cHardwareId::CheckHWIDLock()
-//{
-//	this->matchedName = ""; // reset
-//
-//	std::string hwidListRaw = this->GetHWIDList("https://drive.google.com/uc?export=download&id=10JTzwtuGqScIrnWhNJbx5WGxbmmEAeDV");
-//	if (hwidListRaw.empty()) return false;
-//
-//	std::istringstream iss(hwidListRaw);
-//	std::string line;
-//	std::string currentHWID = this->GetSerial();
-//
-//	while (std::getline(iss, line))
-//	{
-//		size_t delimiter = line.find(':');
-//		if (delimiter != std::string::npos)
-//		{
-//			std::string name = line.substr(0, delimiter);
-//			std::string hwid = line.substr(delimiter + 1);
-//
-//			if (hwid == currentHWID)
-//			{
-//				this->matchedName = name;
-//				return true;
-//			}
-//		}
-//	}
-//
-//	return false;
-//}
-
 bool cHardwareId::CheckHWIDLock()
 {
 	this->matchedName = ""; // Reset matched name
@@ -262,22 +254,47 @@ bool cHardwareId::CheckHWIDLock()
 		return false;
 	}
 
-	// Direct Website API Verification (No raw.txt needed!)
-	// Example: https://hwid-management-system.vercel.app/api/verify?hwid=XXXX-XXXX-XXXX-XXXX
-	std::string verifyUrl = "https://hwid-management-system.vercel.app/api/verify?hwid=" + currentHWID;
+	// ------------------------------------------------------------------------
+	// Verification Endpoint:
+	// Para sa Vercel (Online):  "https://hwid-management-system.vercel.app/api/verify?hwid="
+	// Para sa Local Testing:    "http://127.0.0.1:3000/api/verify?hwid="
+	// ------------------------------------------------------------------------
+	std::string baseUrl = "https://hwid-management-system.vercel.app/api/verify?hwid=";
+	
+	// Kung gusto mo mag-test sa localhost habang bukas ang python server.py:
+	// std::string baseUrl = "http://127.0.0.1:3000/api/verify?hwid=";
+
+	std::string verifyUrl = baseUrl + currentHWID;
 	std::string response = this->GetHWIDList(verifyUrl);
 
 	if (response.empty()) {
 		return false;
 	}
 
+	// Trim whitespace / newlines / carriage returns
 	response = CUtils::get()->Trim(response);
 
-	// Server returns "AUTH_OK:Username" when active and authorized
+	// 1. Plain Text Check: "AUTH_OK:Username"
 	if (response.rfind("AUTH_OK:", 0) == 0)
 	{
 		this->matchedName = response.substr(8); // Extracts the authorized username
 		return true; // License is valid and active!
+	}
+
+	// 2. JSON Fallback Check: {"valid":true,"user":"Username"}
+	if (response.find("\"valid\":true") != std::string::npos || response.find("\"valid\": true") != std::string::npos)
+	{
+		size_t userPos = response.find("\"user\":");
+		if (userPos != std::string::npos)
+		{
+			size_t startQuote = response.find('\"', userPos + 7);
+			size_t endQuote = response.find('\"', startQuote + 1);
+			if (startQuote != std::string::npos && endQuote != std::string::npos)
+			{
+				this->matchedName = response.substr(startQuote + 1, endQuote - startQuote - 1);
+			}
+		}
+		return true;
 	}
 
 	// Response is "AUTH_DENIED:Suspended", "AUTH_DENIED:Expired", or "AUTH_FAILED:Not Registered"

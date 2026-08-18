@@ -32,11 +32,6 @@
     statusFilterSelect: document.getElementById('statusFilterSelect'),
     refreshBtn: document.getElementById('refreshBtn'),
 
-    // Quick URL Banner
-    quickUrlDisplay: document.getElementById('quickUrlDisplay'),
-    copyQuickUrlBtn: document.getElementById('copyQuickUrlBtn'),
-    viewRawLink: document.getElementById('viewRawLink'),
-
     // Single Add Modal
     addModal: document.getElementById('addModal'),
     openAddBtn: document.getElementById('openAddBtn'),
@@ -653,15 +648,6 @@
   // --------------------------------------------------------------------------
 
   function initEventListeners() {
-    // Quick URL Copy
-    const rawUrl = getRawUrl();
-    elements.quickUrlDisplay.textContent = rawUrl;
-    elements.viewRawLink.href = rawUrl;
-
-    elements.copyQuickUrlBtn.addEventListener('click', () => {
-      copyToClipboard(rawUrl, 'Raw endpoint URL copied!');
-    });
-
     // Search & Filter
     elements.searchInput.addEventListener('input', (e) => {
       state.searchQuery = e.target.value;

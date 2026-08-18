@@ -269,6 +269,11 @@ function formatHWID(hwid) {
   return String(hwid).trim().toUpperCase();
 }
 
+function normalizeHWID(hwid) {
+  if (!hwid) return '';
+  return String(hwid).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
 async function getActiveRawList() {
   const records = await getAllHWIDs();
   const activeLines = [];
@@ -344,6 +349,7 @@ module.exports = {
   saveAllHWIDs,
   isExpired,
   formatHWID,
+  normalizeHWID,
   getActiveRawList,
   parseJsonBody,
   getQueryParams,

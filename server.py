@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import urllib.parse
+import re
 from datetime import datetime
 
 PORT = 3000
@@ -198,7 +199,8 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             records = read_hwids()
-            found = next((r for r in records if (r.get('hwid') or '').strip().upper() == target_hwid), None)
+            norm_target = re.sub(r'[^a-zA-Z0-9]', '', target_hwid).upper()
+            found = next((r for r in records if (r.get('hwid') or '').strip().upper() == target_hwid or re.sub(r'[^a-zA-Z0-9]', '', r.get('hwid') or '').upper() == norm_target), None)
 
             if not found:
                 self.send_response(200 if not wants_json else 404)

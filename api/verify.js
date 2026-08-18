@@ -2,6 +2,7 @@ const {
   getAllHWIDs,
   isExpired,
   formatHWID,
+  normalizeHWID,
   parseJsonBody,
   getQueryParams,
 } = require('./_storage');
@@ -39,8 +40,9 @@ module.exports = async function handler(req, res) {
     }
 
     const cleanTarget = formatHWID(queryHWID);
+    const normTarget = normalizeHWID(queryHWID);
     const records = await getAllHWIDs();
-    const found = records.find((r) => formatHWID(r.hwid) === cleanTarget);
+    const found = records.find((r) => formatHWID(r.hwid) === cleanTarget || normalizeHWID(r.hwid) === normTarget);
 
     // 1. Not Found
     if (!found) {
