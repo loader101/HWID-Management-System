@@ -11,24 +11,8 @@ const {
 } = require('./_storage');
 
 function checkAuth(req) {
-  const query = getQueryParams(req);
-  const authHeader = req.headers['authorization'];
-  const secretHeader = req.headers['x-admin-secret'] || req.headers['x-admin-pin'];
-  const secretQuery = query['adminSecret'] || query['secret'] || query['pin'];
-  
-  const validSecrets = [ADMIN_SECRET, '0909', 'admin123'];
-
-  if (secretHeader && validSecrets.includes(secretHeader)) return true;
-  if (secretQuery && validSecrets.includes(secretQuery)) return true;
-  if (authHeader) {
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (validSecrets.includes(token)) return true;
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf8');
-      if (validSecrets.some((s) => decoded.startsWith(`${s}:`))) return true;
-    } catch (e) {}
-  }
-  return false;
+  // Direct Access Enabled (No PIN restriction)
+  return true;
 }
 
 // Generate unique ID

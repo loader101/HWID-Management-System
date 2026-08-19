@@ -949,12 +949,12 @@
   }
 
   // --------------------------------------------------------------------------
-  // Administrator PIN Security Controls
+  // Direct Access Controls (No PIN Lock)
   // --------------------------------------------------------------------------
 
   function unlockDashboard() {
     if (elements.adminLockScreen) {
-      elements.adminLockScreen.classList.add('hidden');
+      elements.adminLockScreen.style.display = 'none';
     }
     if (elements.mainAppContainer) {
       elements.mainAppContainer.style.display = 'block';
@@ -963,83 +963,9 @@
     fetchHWIDs();
   }
 
-  function lockDashboard() {
-    sessionStorage.removeItem('admin_pin_authenticated');
-    if (elements.adminLockScreen) {
-      elements.adminLockScreen.classList.remove('hidden');
-    }
-    if (elements.mainAppContainer) {
-      elements.mainAppContainer.style.display = 'none';
-    }
-    if (elements.adminPinInput) {
-      elements.adminPinInput.value = '';
-      setTimeout(() => elements.adminPinInput.focus(), 100);
-    }
-    if (elements.pinErrorMsg) {
-      elements.pinErrorMsg.textContent = '';
-    }
-  }
-
-  function handlePinSubmit(e) {
-    if (e) e.preventDefault();
-    const pin = (elements.adminPinInput ? elements.adminPinInput.value : '').trim();
-    if (pin === ADMIN_PIN) {
-      sessionStorage.setItem('admin_pin_authenticated', ADMIN_PIN);
-      showToast('Administrator PIN Verified. Access Granted!', 'success');
-      unlockDashboard();
-    } else {
-      if (elements.pinErrorMsg) {
-        elements.pinErrorMsg.textContent = '❌ Please log in administrator pin';
-      }
-      if (elements.pinLoginForm) {
-        elements.pinLoginForm.classList.remove('shake-error');
-        void elements.pinLoginForm.offsetWidth; // trigger reflow
-        elements.pinLoginForm.classList.add('shake-error');
-      }
-      if (elements.adminPinInput) {
-        elements.adminPinInput.value = '';
-        elements.adminPinInput.focus();
-      }
-    }
-  }
-
   function initPinLock() {
-    const savedPin = sessionStorage.getItem('admin_pin_authenticated');
-    if (savedPin === ADMIN_PIN) {
-      unlockDashboard();
-    } else {
-      lockDashboard();
-    }
-
-    if (elements.pinLoginForm) {
-      elements.pinLoginForm.addEventListener('submit', handlePinSubmit);
-    }
-
-    if (elements.adminPinInput) {
-      elements.adminPinInput.addEventListener('input', () => {
-        if (elements.adminPinInput.value.length === 4) {
-          handlePinSubmit();
-        }
-      });
-    }
-
-    if (elements.togglePinVisibilityBtn) {
-      elements.togglePinVisibilityBtn.addEventListener('click', () => {
-        if (!elements.adminPinInput) return;
-        const isPassword = elements.adminPinInput.type === 'password';
-        elements.adminPinInput.type = isPassword ? 'text' : 'password';
-        elements.togglePinVisibilityBtn.textContent = isPassword ? '🔒' : '👁️';
-      });
-    }
-
-
-
-    if (elements.lockDashboardBtn) {
-      elements.lockDashboardBtn.addEventListener('click', () => {
-        lockDashboard();
-        showToast('Dashboard Locked', 'info');
-      });
-    }
+    // Direct Access - loads dashboard automatically
+    unlockDashboard();
   }
 
   // --------------------------------------------------------------------------
