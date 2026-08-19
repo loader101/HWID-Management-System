@@ -987,28 +987,7 @@
       });
     }
 
-    // Keypad button clicks
-    document.querySelectorAll('.keypad-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (!elements.adminPinInput) return;
-        const key = btn.getAttribute('data-key');
-        const action = btn.getAttribute('data-action');
 
-        if (key !== null) {
-          if (elements.adminPinInput.value.length < 8) {
-            elements.adminPinInput.value += key;
-            if (elements.adminPinInput.value.length === 4) {
-              handlePinSubmit();
-            }
-          }
-        } else if (action === 'clear') {
-          elements.adminPinInput.value = '';
-          if (elements.pinErrorMsg) elements.pinErrorMsg.textContent = '';
-        } else if (action === 'back') {
-          elements.adminPinInput.value = elements.adminPinInput.value.slice(0, -1);
-        }
-      });
-    });
 
     if (elements.lockDashboardBtn) {
       elements.lockDashboardBtn.addEventListener('click', () => {

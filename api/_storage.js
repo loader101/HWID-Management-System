@@ -26,7 +26,10 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || '0909';
 const LOCAL_DATA_FILE = path.join(process.cwd(), 'data', 'hwids.json');
 const TMP_DATA_FILE = path.join('/tmp', 'hwids.json');
 
-// In-memory cache across warm serverless invocations
+// NOTE: memoryCache is intentionally NOT used as a cross-request cache.
+// Vercel serverless routes requests to different container instances that each
+// have their own isolated memory — relying on it causes stale-data delays.
+// It is only used transiently within a single saveAllHWIDs call chain.
 let memoryCache = null;
 
 // Determine storage type
@@ -136,12 +139,10 @@ async function saveToGist(records) {
 // 3. Local File / /tmp Fallback
 // --------------------------------------------------------------------------
 function readFromFile() {
-  // Check memory cache first
-  if (memoryCache !== null && Array.isArray(memoryCache)) {
-    return memoryCache;
-  }
+  // DO NOT check memoryCache here — it causes stale reads across Vercel container instances.
+  // Always read from disk so we get the freshest data available to this container.
 
-  // Check /tmp first (since it holds the latest changes in current serverless container)
+  // Check /tmp first (holds latest changes written by this container)
   try {
     if (fs.existsSync(TMP_DATA_FILE)) {
       const content = fs.readFileSync(TMP_DATA_FILE, 'utf8');
@@ -190,48 +191,51 @@ function saveToFile(records) {
 // Unified Storage API
 // --------------------------------------------------------------------------
 async function getAllHWIDs() {
-  // 1. Check Upstash / Vercel KV
+  // IMPORTANT: Never short-circuit with memoryCache here.
+  // Vercel may route any request to a fresh Lambda instance with empty memory.
+  // Always go to the authoritative cloud store first for accurate, up-to-date data.
+
+  // 1. Check Upstash / Vercel KV (source of truth when configured)
   if (KV_URL && KV_TOKEN) {
     const kvData = await getFromKV();
-    if (kvData && Array.isArray(kvData) && kvData.length > 0) {
-      memoryCache = kvData;
+    if (kvData && Array.isArray(kvData)) {
+      // Write through to /tmp so local fallback is warm within this container
       saveToFile(kvData);
       return kvData;
     }
-    // If KV is newly linked and empty, initialize it with default data
+    // KV is configured but empty — seed it with local/default data
     const local = readFromFile();
     if (local && local.length > 0) {
       await saveToKV(local);
-      memoryCache = local;
-      return local;
     }
+    return local;
   }
 
-  // 2. Check GitHub Gist
+  // 2. Check GitHub Gist (source of truth when configured)
   if (GITHUB_TOKEN && GIST_ID) {
     const gistData = await getFromGist();
-    if (gistData && Array.isArray(gistData) && gistData.length > 0) {
-      memoryCache = gistData;
+    if (gistData && Array.isArray(gistData)) {
       saveToFile(gistData);
       return gistData;
     }
   }
 
-  // 3. Fallback to /tmp / local file / memory cache / defaultSeedData
-  const data = readFromFile();
-  memoryCache = data;
-  return data;
+  // 3. Fallback to /tmp / local file / defaultSeedData (ephemeral — no cloud persistence)
+  return readFromFile();
 }
 
 async function saveAllHWIDs(records) {
-  memoryCache = records;
+  // Save to all configured cloud stores in parallel for speed
+  const saves = [];
   if (KV_URL && KV_TOKEN) {
-    await saveToKV(records);
+    saves.push(saveToKV(records));
   }
   if (GITHUB_TOKEN && GIST_ID) {
-    await saveToGist(records);
+    saves.push(saveToGist(records));
   }
-  saveToFile(records);
+  // Write local file in parallel too
+  saves.push(Promise.resolve(saveToFile(records)));
+  await Promise.all(saves);
   return records;
 }
 
