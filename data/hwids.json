@@ -1,38 +1,11 @@
 [
   {
-    "id": "hwid_1787168349376_xuu2eb",
-    "name": "ClientFromWebsite",
-    "hwid": "7777-8888-9999-0000",
-    "status": "active",
-    "expiresAt": null,
-    "createdAt": "2026-08-19T19:39:09.376Z",
-    "notes": "Activated via web dashboard form"
-  },
-  {
-    "id": "hwid_1",
-    "name": "JayyTesddddddt",
-    "hwid": "4d271-42d43-4442-4d444x",
+    "id": "hwid_user_jayy",
+    "name": "JayyTest",
+    "hwid": "4271-4243-4442-4444",
     "status": "active",
     "expiresAt": null,
     "createdAt": "2026-08-20T00:00:00.000Z",
-    "notes": "Owner Active Access"
-  },
-  {
-    "id": "hwid_2",
-    "name": "Jaymian_Admin",
-    "hwid": "AAAA-BBBB-CCCC-DDDD",
-    "status": "active",
-    "expiresAt": null,
-    "createdAt": "2026-08-19T00:00:00.000Z",
-    "notes": "Admin"
-  },
-  {
-    "id": "hwid_3",
-    "name": "Member_30Days",
-    "hwid": "1111-2222-3333-4444",
-    "status": "active",
-    "expiresAt": "2026-09-30T00:00:00.000Z",
-    "createdAt": "2026-08-19T00:00:00.000Z",
-    "notes": "30 Days Access"
+    "notes": "Main Admin License"
   }
 ]

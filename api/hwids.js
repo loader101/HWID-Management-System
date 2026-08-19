@@ -39,18 +39,6 @@ module.exports = async function handler(req, res) {
     let records = await getAllHWIDs();
     const query = getQueryParams(req);
 
-    // Check if client provided full sync database in header
-    const syncHeader = req.headers['x-sync-database'];
-    if (syncHeader) {
-      try {
-        const decodedSync = JSON.parse(Buffer.from(syncHeader, 'base64').toString('utf8'));
-        if (Array.isArray(decodedSync) && decodedSync.length > records.length) {
-          records = decodedSync;
-          await saveAllHWIDs(records);
-        }
-      } catch (e) {}
-    }
-
     // ------------------------------------------------------------------------
     // GET /api/hwids - List all HWIDs + computed stats & storage status
     // ------------------------------------------------------------------------

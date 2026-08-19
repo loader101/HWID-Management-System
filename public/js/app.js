@@ -217,23 +217,12 @@
     document.body.removeChild(textArea);
   }
 
-  function getAuthHeaders(includeSync = false) {
-    const headers = {
+  function getAuthHeaders() {
+    return {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${state.adminSecret}`,
       'x-admin-secret': state.adminSecret,
     };
-
-    if (includeSync) {
-      const savedLocal = localStorage.getItem('hwid_local_db');
-      if (savedLocal) {
-        try {
-          headers['x-sync-database'] = btoa(unescape(encodeURIComponent(savedLocal)));
-        } catch (e) {}
-      }
-    }
-
-    return headers;
   }
 
   // --------------------------------------------------------------------------
@@ -243,7 +232,7 @@
   async function fetchHWIDs(silent = false) {
     try {
       const res = await fetch('/api/hwids', {
-        headers: getAuthHeaders(true),
+        headers: getAuthHeaders(),
       });
 
       if (res.status === 401) {

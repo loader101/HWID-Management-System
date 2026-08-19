@@ -203,13 +203,10 @@ async function saveToGist(records) {
 // 3. Local File / /tmp Fallback
 // --------------------------------------------------------------------------
 function readFromFile() {
-  // DO NOT check memoryCache here — it causes stale reads across Vercel container instances.
-  // Always read from disk so we get the freshest data available to this container.
-
-  // Check /tmp first (holds latest changes written by this container)
+  // 1. Check local data directory
   try {
-    if (fs.existsSync(TMP_DATA_FILE)) {
-      const content = fs.readFileSync(TMP_DATA_FILE, 'utf8');
+    if (fs.existsSync(LOCAL_DATA_FILE)) {
+      const content = fs.readFileSync(LOCAL_DATA_FILE, 'utf8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
         return parsed;
@@ -217,10 +214,10 @@ function readFromFile() {
     }
   } catch (e) {}
 
-  // Check local data directory
+  // 2. Check /tmp directory (for Vercel serverless writable scratchpad)
   try {
-    if (fs.existsSync(LOCAL_DATA_FILE)) {
-      const content = fs.readFileSync(LOCAL_DATA_FILE, 'utf8');
+    if (fs.existsSync(TMP_DATA_FILE)) {
+      const content = fs.readFileSync(TMP_DATA_FILE, 'utf8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
         return parsed;
@@ -261,23 +258,23 @@ async function getAllHWIDs() {
   // 1. Check Upstash / Vercel KV (source of truth when configured)
   if (kvUrl && kvToken) {
     const kvData = await getFromKV();
-    if (kvData && Array.isArray(kvData) && kvData.length > 0) {
+    if (kvData !== null && Array.isArray(kvData)) {
       saveToFile(kvData);
       return kvData;
     }
-    // If KV returned empty/null, read from local / default
+    // Only if KV key is null (uninitialized), seed from initial file
     const local = readFromFile();
     if (local && local.length > 0) {
       await saveToKV(local);
       return local;
     }
-    return local || [];
+    return [];
   }
 
   // 2. Check GitHub Gist (source of truth when configured)
   if (GITHUB_TOKEN && GIST_ID) {
     const gistData = await getFromGist();
-    if (gistData && Array.isArray(gistData) && gistData.length > 0) {
+    if (gistData !== null && Array.isArray(gistData)) {
       saveToFile(gistData);
       return gistData;
     }
