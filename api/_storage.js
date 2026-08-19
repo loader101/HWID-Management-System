@@ -286,6 +286,7 @@ async function getActiveRawList() {
 
 // Robust Body Parser for Vercel Serverless Functions
 async function parseJsonBody(req) {
+  if (!req) return {};
   if (req.body !== undefined && req.body !== null) {
     if (typeof req.body === 'object') return req.body;
     if (typeof req.body === 'string' && req.body.trim().length > 0) {
@@ -295,6 +296,10 @@ async function parseJsonBody(req) {
         return {};
       }
     }
+  }
+
+  if (typeof req.on !== 'function') {
+    return {};
   }
 
   return new Promise((resolve) => {

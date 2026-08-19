@@ -1,65 +1,23 @@
 #include "HardwareId.hpp"
-#include "DiscordApi.hpp"
 
-// --------------------------------------------------------------------------
-// HTTP GET helper — fetches plain-text response from any URL.
-// Handles HTTPS, no-cache flags, and a 10-second hard timeout so the client
-// never hangs on a cold Vercel serverless start.
-// --------------------------------------------------------------------------
 std::string cHardwareId::GetHWIDList(const std::string& url)
 {
-	// 1. Open Internet session
-	HINTERNET hInternet = InternetOpenA(
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) HWIDClient/1.0",
-		INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+	HINTERNET hInternet = InternetOpen("HWIDChecker", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+	if (!hInternet) return "";
 
-	if (!hInternet)
-	{
-		hInternet = InternetOpenA("HWIDChecker", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
-		if (!hInternet) return "";
-	}
-
-	// 2. Set timeouts (10 seconds) — prevents hanging on cold Vercel starts
-	DWORD dwTimeout = 10000;
-	InternetSetOption(hInternet, INTERNET_OPTION_CONNECT_TIMEOUT, &dwTimeout, sizeof(dwTimeout));
-	InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &dwTimeout, sizeof(dwTimeout));
-	InternetSetOption(hInternet, INTERNET_OPTION_SEND_TIMEOUT,    &dwTimeout, sizeof(dwTimeout));
-
-	// 3. Detect HTTPS vs HTTP
-	bool isHttps = (url.rfind("https://", 0) == 0);
-	DWORD flags  = INTERNET_FLAG_RELOAD
-	             | INTERNET_FLAG_DONT_CACHE
-	             | INTERNET_FLAG_PRAGMA_NOCACHE
-	             | INTERNET_FLAG_NO_CACHE_WRITE;
-
-	if (isHttps)
-	{
-		flags |= INTERNET_FLAG_SECURE
-		      |  INTERNET_FLAG_IGNORE_CERT_CN_INVALID
-		      |  INTERNET_FLAG_IGNORE_CERT_DATE_INVALID;
-	}
-
-	// 4. Open URL
-	HINTERNET hFile = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, flags, 0);
+	HINTERNET hFile = InternetOpenUrl(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD, 0);
 	if (!hFile)
 	{
-		// Fallback: retry with reload only
-		hFile = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD, 0);
-		if (!hFile)
-		{
-			InternetCloseHandle(hInternet);
-			return "";
-		}
+		InternetCloseHandle(hInternet);
+		return "";
 	}
 
-	// 5. Read Response
-	char   buffer[4096];
-	DWORD  bytesRead = 0;
-	std::string result = "";
+	char buffer[4096];
+	DWORD bytesRead;
+	std::string result;
 
-	while (InternetReadFile(hFile, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead != 0)
+	while (InternetReadFile(hFile, buffer, sizeof(buffer), &bytesRead) && bytesRead != 0)
 	{
-		buffer[bytesRead] = '\0';
 		result.append(buffer, bytesRead);
 	}
 
@@ -196,7 +154,7 @@ std::string cHardwareId::GetHashText(const void* data, const size_t data_size)
 	{
 		oss.fill('0');
 		oss.width(2);
-		oss << std::hex << static_cast<const int>(*iter);  // FIX: was "StaCa<const int>" (typo)
+		oss << std::hex << StaCa<const int>(*iter);
 	}
 
 	CryptDestroyHash(hHash);
@@ -207,11 +165,10 @@ std::string cHardwareId::GetHashText(const void* data, const size_t data_size)
 std::string cHardwareId::GetHashSerialKey()
 {
 	std::string SerialKey = this->GetSerialKey();
-	const void* pData     = SerialKey.c_str();
-	size_t      Size      = SerialKey.size();
-	std::string Hash      = this->GetHashText(pData, Size);
+	const void* pData = SerialKey.c_str();
+	size_t Size = SerialKey.size();
+	std::string Hash = this->GetHashText(pData, Size);
 
-	// Original HWID transformation algorithm
 	for (auto& c : Hash)
 	{
 		if (c >= 'a' && c <= 'f')
@@ -239,7 +196,7 @@ std::string cHardwareId::GetHashSerialKey()
 			c = '9';
 		}
 
-		c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+		c = toupper(c);
 	}
 
 	return Hash;
@@ -266,130 +223,118 @@ std::string cHardwareId::GetSerial()
 	return Serial;
 }
 
-// --------------------------------------------------------------------------
-// CheckHWIDLock — verifies the current machine's HWID against the Vercel API.
-//
-// Endpoint: https://hwid-management-system.vercel.app/api/verify?hwid=XXXX-XXXX-XXXX-XXXX
-//
-// API Responses:
-//   AUTH_OK:<username>           -> Active license  [OK]
-//   AUTH_DENIED:Expired          -> Expired         [BLOCKED]
-//   AUTH_DENIED:Suspended        -> Suspended       [BLOCKED]
-//   AUTH_FAILED:Not Registered   -> Not in database [BLOCKED]
-//   AUTH_FAILED:*                -> Error / no conn [BLOCKED]
-// --------------------------------------------------------------------------
 bool cHardwareId::CheckHWIDLock()
 {
-	this->matchedName = "";
-	this->hwidStatus  = "Unauthorized";
+	// 1. Reset state
+	this->matchedName = "Unknown User";
+	this->licenseStatus = "Unauthorized";
+	this->expirationDate = "N/A";
+	this->remainingDays = -1;
+	this->statusCode = HWIDStatus::Unauthorized;
 
 	std::string currentHWID = this->GetSerial();
-
-	if (currentHWID.empty()) {
-		this->hwidStatus = "Connection Failed";
+	if (currentHWID.empty())
+	{
+		this->licenseStatus = "Invalid HWID";
+		this->statusCode = HWIDStatus::Unauthorized;
 		return false;
 	}
 
-	// -----------------------------------------------------------------------
-	// Primary: Direct Verification API endpoint
-	// -----------------------------------------------------------------------
-	std::string baseUrl   = "https://hwid-management-system.vercel.app/api/verify?hwid=";
-	std::string verifyUrl = baseUrl + currentHWID;
-	std::string response  = this->GetHWIDList(verifyUrl);
+	// 2. Direct Vercel System API Verification
+	std::string verifyUrl = "https://hwid-management-system.vercel.app/api/verify?hwid=" + currentHWID;
+	std::string response = this->GetHWIDList(verifyUrl);
 
-	if (!response.empty())
+	// Fallback to secondary raw endpoint if direct verify returned empty (e.g. network hiccup)
+	if (response.empty())
 	{
-		response = CUtils::get()->Trim(response);
+		std::string rawUrl = "https://hwid-management-system.vercel.app/api/raw";
+		std::string rawList = this->GetHWIDList(rawUrl);
 
-		// 1. Active license: server returns "AUTH_OK:Username"
-		if (response.rfind("AUTH_OK:", 0) == 0)
+		if (!rawList.empty())
 		{
-			this->matchedName = response.substr(8);
-			this->hwidStatus  = "Activated";
-			return true;
-		}
+			std::istringstream iss(rawList);
+			std::string line;
 
-		// 2. Expired license: "AUTH_DENIED:Expired"
-		if (response.rfind("AUTH_DENIED:Expired", 0) == 0
-		    || response.find("\"status\":\"expired\"") != std::string::npos)
-		{
-			this->hwidStatus = "Expired";
-			return false;
-		}
-
-		// 3. Suspended license: "AUTH_DENIED:Suspended"
-		if (response.rfind("AUTH_DENIED:Suspended", 0) == 0
-		    || response.find("\"status\":\"suspended\"") != std::string::npos)
-		{
-			this->hwidStatus = "Suspended";
-			return false;
-		}
-
-		// 4. JSON fallback: {"valid":true,"user":"Username"}
-		if (response.find("\"valid\":true") != std::string::npos
-		    || response.find("\"valid\": true") != std::string::npos)
-		{
-			size_t userPos = response.find("\"user\":");
-			if (userPos != std::string::npos)
+			while (std::getline(iss, line))
 			{
-				size_t startQuote = response.find('"', userPos + 7);
-				size_t endQuote   = response.find('"', startQuote + 1);
-				if (startQuote != std::string::npos && endQuote != std::string::npos)
+				if (line.empty()) continue;
+				size_t delimiter = line.find(':');
+				if (delimiter != std::string::npos)
 				{
-					this->matchedName = response.substr(startQuote + 1, endQuote - startQuote - 1);
-				}
-			}
-			this->hwidStatus = "Activated";
-			return true;
-		}
-	}
+					std::string name = line.substr(0, delimiter);
+					std::string hwid = line.substr(delimiter + 1);
 
-	// -----------------------------------------------------------------------
-	// Secondary Fallback: Check /api/raw list line by line (NAME:HWID)
-	// -----------------------------------------------------------------------
-	std::string rawUrl  = "https://hwid-management-system.vercel.app/api/raw";
-	std::string rawList = this->GetHWIDList(rawUrl);
+					name = CUtils::get()->Trim(name);
+					hwid = CUtils::get()->Trim(hwid);
 
-	if (!rawList.empty())
-	{
-		std::istringstream iss(rawList);
-		std::string line;
-
-		while (std::getline(iss, line))
-		{
-			line = CUtils::get()->Trim(line);
-			if (line.empty()) continue;
-
-			size_t delimiter = line.find(':');
-			if (delimiter != std::string::npos)
-			{
-				std::string name = line.substr(0, delimiter);
-				std::string hwid = line.substr(delimiter + 1);
-
-				// Trim any extra spaces
-				name = CUtils::get()->Trim(name);
-				hwid = CUtils::get()->Trim(hwid);
-
-				if (hwid == currentHWID)
-				{
-					this->matchedName = name;
-					this->hwidStatus  = "Activated";
-					return true;
+					if (hwid == currentHWID)
+					{
+						this->matchedName = name;
+						this->licenseStatus = "Active";
+						this->expirationDate = "Lifetime (Raw Sync)";
+						this->remainingDays = -1;
+						this->statusCode = HWIDStatus::Active;
+						return true;
+					}
 				}
 			}
 		}
+
+		// If still empty / server unreachable
+		this->licenseStatus = "Connection Error / Server Offline";
+		this->statusCode = HWIDStatus::ConnectionError;
+		return false;
 	}
 
-	if (response.empty() && rawList.empty())
+	response = CUtils::get()->Trim(response);
+
+	// 3. Parse tokens: "PREFIX:Username:ExpirationDisplay:Status"
+	std::vector<std::string> tokens;
+	std::istringstream tokenStream(response);
+	std::string token;
+	while (std::getline(tokenStream, token, ':'))
 	{
-		this->hwidStatus = "Connection Failed";
+		tokens.push_back(CUtils::get()->Trim(token));
 	}
+
+	std::string prefix = tokens.empty() ? "" : tokens[0];
+
+	// Handle AUTH_OK (Active & Authorized)
+	if (prefix == "AUTH_OK")
+	{
+		this->matchedName = (tokens.size() > 1 && !tokens[1].empty()) ? tokens[1] : "Active User";
+		this->expirationDate = (tokens.size() > 2 && !tokens[2].empty()) ? tokens[2] : "Lifetime";
+		this->licenseStatus = "Active";
+		this->statusCode = HWIDStatus::Active;
+		return true;
+	}
+	// Handle AUTH_SUSPENDED (Account Blocked / Suspended by Admin)
+	else if (prefix == "AUTH_SUSPENDED" || response.find("AUTH_DENIED:Suspended") != std::string::npos)
+	{
+		this->matchedName = (tokens.size() > 1 && !tokens[1].empty()) ? tokens[1] : "Suspended User";
+		this->expirationDate = (tokens.size() > 2 && !tokens[2].empty()) ? tokens[2] : "Suspended";
+		this->licenseStatus = "Suspended";
+		this->statusCode = HWIDStatus::Suspended;
+		return false;
+	}
+	// Handle AUTH_EXPIRED (License Duration Expired)
+	else if (prefix == "AUTH_EXPIRED" || response.find("AUTH_DENIED:Expired") != std::string::npos)
+	{
+		this->matchedName = (tokens.size() > 1 && !tokens[1].empty()) ? tokens[1] : "Expired User";
+		this->expirationDate = (tokens.size() > 2 && !tokens[2].empty()) ? tokens[2] : "Expired";
+		this->licenseStatus = "Expired";
+		this->statusCode = HWIDStatus::Expired;
+		return false;
+	}
+	// Handle AUTH_FAILED / Unauthorized
 	else
 	{
-		this->hwidStatus = "Not Registered";
+		this->matchedName = "Unregistered User";
+		this->expirationDate = "N/A";
+		this->licenseStatus = "Not Registered / Unauthorized";
+		this->statusCode = HWIDStatus::Unauthorized;
+		return false;
 	}
-
-	return false;
 }
 
 std::string cHardwareId::GetMatchedName()
@@ -397,12 +342,42 @@ std::string cHardwareId::GetMatchedName()
 	return this->matchedName.empty() ? "Unknown User" : this->matchedName;
 }
 
-std::string cHardwareId::GetHWIDStatus()
+std::string cHardwareId::GetLicenseStatus()
 {
-	return this->hwidStatus.empty() ? "Unauthorized" : this->hwidStatus;
+	return this->licenseStatus.empty() ? "Unauthorized" : this->licenseStatus;
+}
+
+std::string cHardwareId::GetExpiration()
+{
+	return this->expirationDate.empty() ? "N/A" : this->expirationDate;
+}
+
+int cHardwareId::GetRemainingDays()
+{
+	return this->remainingDays;
+}
+
+HWIDStatus cHardwareId::GetStatusCode()
+{
+	return this->statusCode;
+}
+
+bool cHardwareId::IsActive()
+{
+	return this->statusCode == HWIDStatus::Active;
+}
+
+bool cHardwareId::IsSuspended()
+{
+	return this->statusCode == HWIDStatus::Suspended;
 }
 
 bool cHardwareId::IsExpired()
 {
-	return this->hwidStatus == "Expired";
+	return this->statusCode == HWIDStatus::Expired;
 }
+
+bool cHardwareId::IsAuthorized()
+{
+	return this->statusCode == HWIDStatus::Active;
+}

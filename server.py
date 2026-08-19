@@ -72,6 +72,40 @@ def is_expired(expires_at):
         return False
 
 
+def format_expiry_display(expires_at):
+    if not expires_at:
+        return 'Lifetime'
+    try:
+        clean_exp = expires_at.replace('Z', '+00:00')
+        exp_dt = datetime.fromisoformat(clean_exp)
+        now_ts = datetime.utcnow().timestamp()
+        diff_sec = exp_dt.timestamp() - now_ts
+        date_str = exp_dt.strftime('%Y-%m-%d')
+        if diff_sec <= 0:
+            return f"{date_str} (Expired)"
+        diff_days = int((diff_sec + 86399) // 86400)
+        if diff_days == 1:
+            return f"{date_str} (1 Day Left)"
+        return f"{date_str} ({diff_days} Days Left)"
+    except Exception:
+        return 'Lifetime'
+
+
+def get_days_remaining(expires_at):
+    if not expires_at:
+        return -1
+    try:
+        clean_exp = expires_at.replace('Z', '+00:00')
+        exp_dt = datetime.fromisoformat(clean_exp)
+        now_ts = datetime.utcnow().timestamp()
+        diff_sec = exp_dt.timestamp() - now_ts
+        if diff_sec <= 0:
+            return 0
+        return int((diff_sec + 86399) // 86400)
+    except Exception:
+        return -1
+
+
 def get_active_raw_lines():
     records = read_hwids()
     active_lines = []
@@ -191,11 +225,11 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if wants_json:
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps({'valid': False, 'message': 'hwid param required'}).encode('utf-8'))
+                    self.wfile.write(json.dumps({'valid': False, 'status': 'error', 'message': 'hwid param required'}).encode('utf-8'))
                 else:
                     self.send_header('Content-Type', 'text/plain; charset=utf-8')
                     self.end_headers()
-                    self.wfile.write(b'AUTH_FAILED:Missing HWID Parameter')
+                    self.wfile.write(b'AUTH_FAILED:Missing HWID Parameter:N/A:error')
                 return
 
             records = read_hwids()
@@ -208,25 +242,47 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if wants_json:
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps({'valid': False, 'message': 'HWID not found'}).encode('utf-8'))
+                    self.wfile.write(json.dumps({
+                        'valid': False,
+                        'status': 'not_found',
+                        'message': 'HWID not found',
+                        'hwid': target_hwid,
+                        'user': 'Unknown User',
+                        'expiresAt': 'N/A',
+                        'expiresDisplay': 'N/A',
+                        'daysRemaining': 0
+                    }).encode('utf-8'))
                 else:
                     self.send_header('Content-Type', 'text/plain; charset=utf-8')
                     self.end_headers()
-                    self.wfile.write(b'AUTH_FAILED:Not Registered')
+                    self.wfile.write(b'AUTH_FAILED:Not Registered:N/A:unregistered')
                 return
 
+            user_name = (found.get('name') or 'User').strip()
+            expiry_display = format_expiry_display(found.get('expiresAt'))
+            days_left = get_days_remaining(found.get('expiresAt'))
             status = found.get('status', 'active')
+
             if status == 'suspended':
                 self.send_response(200 if not wants_json else 403)
                 self.send_cors_headers()
                 if wants_json:
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps({'valid': False, 'status': 'suspended', 'user': found.get('name')}).encode('utf-8'))
+                    self.wfile.write(json.dumps({
+                        'valid': False,
+                        'status': 'suspended',
+                        'message': 'License suspended by admin',
+                        'user': user_name,
+                        'hwid': found.get('hwid'),
+                        'expiresAt': found.get('expiresAt') or 'Lifetime',
+                        'expiresDisplay': expiry_display,
+                        'daysRemaining': days_left
+                    }).encode('utf-8'))
                 else:
                     self.send_header('Content-Type', 'text/plain; charset=utf-8')
                     self.end_headers()
-                    self.wfile.write(b'AUTH_DENIED:Suspended')
+                    self.wfile.write(f'AUTH_SUSPENDED:{user_name}:{expiry_display}:suspended'.encode('utf-8'))
                 return
 
             if is_expired(found.get('expiresAt')):
@@ -235,24 +291,41 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
                 if wants_json:
                     self.send_header('Content-Type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps({'valid': False, 'status': 'expired', 'user': found.get('name')}).encode('utf-8'))
+                    self.wfile.write(json.dumps({
+                        'valid': False,
+                        'status': 'expired',
+                        'message': 'License duration expired',
+                        'user': user_name,
+                        'hwid': found.get('hwid'),
+                        'expiresAt': found.get('expiresAt'),
+                        'expiresDisplay': expiry_display,
+                        'daysRemaining': 0
+                    }).encode('utf-8'))
                 else:
                     self.send_header('Content-Type', 'text/plain; charset=utf-8')
                     self.end_headers()
-                    self.wfile.write(b'AUTH_DENIED:Expired')
+                    self.wfile.write(f'AUTH_EXPIRED:{user_name}:{expiry_display}:expired'.encode('utf-8'))
                 return
 
-            user_name = (found.get('name') or 'User').strip()
             self.send_response(200)
             self.send_cors_headers()
             if wants_json:
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps({'valid': True, 'status': 'active', 'user': user_name, 'hwid': found.get('hwid')}).encode('utf-8'))
+                self.wfile.write(json.dumps({
+                    'valid': True,
+                    'status': 'active',
+                    'message': 'License is active and authorized',
+                    'user': user_name,
+                    'hwid': found.get('hwid'),
+                    'expiresAt': found.get('expiresAt') or 'Lifetime',
+                    'expiresDisplay': expiry_display,
+                    'daysRemaining': days_left
+                }).encode('utf-8'))
             else:
                 self.send_header('Content-Type', 'text/plain; charset=utf-8')
                 self.end_headers()
-                self.wfile.write(f'AUTH_OK:{user_name}'.encode('utf-8'))
+                self.wfile.write(f'AUTH_OK:{user_name}:{expiry_display}:active'.encode('utf-8'))
             return
 
         # 4. Static Files from public/

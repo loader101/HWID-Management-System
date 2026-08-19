@@ -267,11 +267,16 @@
               <span>License Validity / Expiry</span>
               <span class="form-hint">Default: Lifetime</span>
             </label>
-            <div id="addExpiryPresets" class="preset-buttons">
+            <div id="addExpiryPresets" class="preset-buttons" style="display: flex; flex-wrap: wrap; gap: 6px;">
               <button type="button" class="btn-preset active" data-preset="lifetime">⚡ Lifetime</button>
               <button type="button" class="btn-preset" data-preset="1d">1 Day</button>
+              <button type="button" class="btn-preset" data-preset="3d">3 Days</button>
               <button type="button" class="btn-preset" data-preset="7d">7 Days</button>
+              <button type="button" class="btn-preset" data-preset="15d">15 Days</button>
               <button type="button" class="btn-preset" data-preset="30d">30 Days</button>
+              <button type="button" class="btn-preset" data-preset="60d">60 Days</button>
+              <button type="button" class="btn-preset" data-preset="90d">90 Days</button>
+              <button type="button" class="btn-preset" data-preset="365d">1 Year</button>
             </div>
             <input 
               type="datetime-local" 
@@ -397,10 +402,16 @@
 
           <div class="form-group">
             <label class="form-label" for="editExpiryInput">Expiration Date</label>
-            <div id="editExpiryPresets" class="preset-buttons">
+            <div id="editExpiryPresets" class="preset-buttons" style="display: flex; flex-wrap: wrap; gap: 6px;">
               <button type="button" class="btn-preset active" data-preset="lifetime">⚡ Lifetime</button>
+              <button type="button" class="btn-preset" data-preset="1d">+1 Day</button>
+              <button type="button" class="btn-preset" data-preset="3d">+3 Days</button>
               <button type="button" class="btn-preset" data-preset="7d">+7 Days</button>
+              <button type="button" class="btn-preset" data-preset="15d">+15 Days</button>
               <button type="button" class="btn-preset" data-preset="30d">+30 Days</button>
+              <button type="button" class="btn-preset" data-preset="60d">+60 Days</button>
+              <button type="button" class="btn-preset" data-preset="90d">+90 Days</button>
+              <button type="button" class="btn-preset" data-preset="365d">+1 Year</button>
             </div>
             <input type="datetime-local" id="editExpiryInput" class="input-styled" style="margin-top: 10px;" />
           </div>

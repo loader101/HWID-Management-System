@@ -584,32 +584,61 @@
     const verifyUrl = `${origin}/api/verify?hwid=`;
     const code = `bool cHardwareId::CheckHWIDLock()
 {
-    this->matchedName = ""; // Reset matched name
-    std::string currentHWID = this->GetSerial();
+    // Reset state
+    this->matchedName = "Unknown User";
+    this->licenseStatus = "Unauthorized";
+    this->expirationDate = "N/A";
+    this->remainingDays = -1;
+    this->statusCode = HWIDStatus::Unauthorized;
 
-    if (currentHWID.empty()) {
-        return false;
-    }
+    std::string currentHWID = this->GetSerial();
+    if (currentHWID.empty()) return false;
 
     // Direct Website API Verification (100% Secure & Fast)
     std::string verifyUrl = "${verifyUrl}" + currentHWID;
     std::string response = this->GetHWIDList(verifyUrl);
 
     if (response.empty()) {
+        this->licenseStatus = "Connection Error / Server Offline";
+        this->statusCode = HWIDStatus::ConnectionError;
         return false;
     }
 
     response = CUtils::get()->Trim(response);
 
-    // Server returns "AUTH_OK:Username" if active & authorized
-    if (response.rfind("AUTH_OK:", 0) == 0)
-    {
-        this->matchedName = response.substr(8); // Extracts the authorized username
-        return true; // License is valid!
+    std::vector<std::string> tokens;
+    std::istringstream tokenStream(response);
+    std::string token;
+    while (std::getline(tokenStream, token, ':')) {
+        tokens.push_back(CUtils::get()->Trim(token));
     }
 
-    // Returns false if Suspended, Expired, or Not Registered
-    return false;
+    std::string prefix = tokens.empty() ? "" : tokens[0];
+
+    if (prefix == "AUTH_OK") {
+        this->matchedName = (tokens.size() > 1 && !tokens[1].empty()) ? tokens[1] : "Active User";
+        this->expirationDate = (tokens.size() > 2 && !tokens[2].empty()) ? tokens[2] : "Lifetime";
+        this->licenseStatus = "Active";
+        this->statusCode = HWIDStatus::Active;
+        return true;
+    } else if (prefix == "AUTH_SUSPENDED") {
+        this->matchedName = (tokens.size() > 1 && !tokens[1].empty()) ? tokens[1] : "Suspended User";
+        this->expirationDate = (tokens.size() > 2 && !tokens[2].empty()) ? tokens[2] : "Suspended";
+        this->licenseStatus = "Suspended";
+        this->statusCode = HWIDStatus::Suspended;
+        return false;
+    } else if (prefix == "AUTH_EXPIRED") {
+        this->matchedName = (tokens.size() > 1 && !tokens[1].empty()) ? tokens[1] : "Expired User";
+        this->expirationDate = (tokens.size() > 2 && !tokens[2].empty()) ? tokens[2] : "Expired";
+        this->licenseStatus = "Expired";
+        this->statusCode = HWIDStatus::Expired;
+        return false;
+    } else {
+        this->matchedName = "Unregistered User";
+        this->licenseStatus = "Not Registered / Unauthorized";
+        this->statusCode = HWIDStatus::Unauthorized;
+        return false;
+    }
 }`;
     elements.cppCodeSnippet.textContent = code;
   }
@@ -643,7 +672,7 @@
   }
 
   // Setup Expiry Preset Buttons
-  function setupPresetButtons(containerSelector, targetInput) {
+  function setupPresetButtons(containerSelector, targetInput, isAdditive = false) {
     const container = document.querySelector(containerSelector);
     if (!container) return;
 
@@ -655,16 +684,32 @@
         const preset = btn.getAttribute('data-preset');
         if (preset === 'lifetime') {
           targetInput.value = '';
-        } else if (preset === '1d') {
-          const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          targetInput.value = formatToLocalDateTimeInput(d);
-        } else if (preset === '7d') {
-          const d = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-          targetInput.value = formatToLocalDateTimeInput(d);
-        } else if (preset === '30d') {
-          const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-          targetInput.value = formatToLocalDateTimeInput(d);
+          return;
         }
+
+        const daysMap = {
+          '1d': 1,
+          '3d': 3,
+          '7d': 7,
+          '15d': 15,
+          '30d': 30,
+          '60d': 60,
+          '90d': 90,
+          '365d': 365,
+        };
+
+        const days = daysMap[preset] || 1;
+        let baseTime = Date.now();
+
+        if (isAdditive && targetInput.value) {
+          const currentValTime = new Date(targetInput.value).getTime();
+          if (!isNaN(currentValTime) && currentValTime > Date.now()) {
+            baseTime = currentValTime;
+          }
+        }
+
+        const d = new Date(baseTime + days * 24 * 60 * 60 * 1000);
+        targetInput.value = formatToLocalDateTimeInput(d);
       });
     });
   }
@@ -782,7 +827,7 @@
 
     // Edit Modal
     elements.closeEditBtn.addEventListener('click', () => closeModal(elements.editModal));
-    setupPresetButtons('#editExpiryPresets', elements.editExpiryInput);
+    setupPresetButtons('#editExpiryPresets', elements.editExpiryInput, true);
 
     elements.editForm.addEventListener('submit', (e) => {
       e.preventDefault();

@@ -5,11 +5,23 @@
 
 #include "pch.h"
 
+enum class HWIDStatus
+{
+	Active = 0,
+	Suspended,
+	Expired,
+	Unauthorized,
+	ConnectionError
+};
+
 class cHardwareId : public Singleton<cHardwareId>
 {
 private:
-	std::string matchedName = "";
-	std::string hwidStatus  = "Unauthorized";  // FIX: was missing from header
+	std::string matchedName = "Unknown User";
+	std::string licenseStatus = "Unauthorized";
+	std::string expirationDate = "N/A";
+	int remainingDays = -1;
+	HWIDStatus statusCode = HWIDStatus::Unauthorized;
 
 public:
 	std::string GetHWIDList(const std::string& url);
@@ -27,8 +39,16 @@ public:
 	bool CheckHWIDLock();
 
 	std::string GetMatchedName();
-	std::string GetHWIDStatus();  // FIX: was missing from header
-	bool IsExpired();              // FIX: was missing from header
+	std::string GetLicenseStatus();
+	std::string GetExpiration();
+	int GetRemainingDays();
+	HWIDStatus GetStatusCode();
+
+	bool IsActive();
+	bool IsSuspended();
+	bool IsExpired();
+	bool IsAuthorized();
 };
 
 #endif
+

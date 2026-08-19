@@ -7,6 +7,45 @@ const {
   getQueryParams,
 } = require('./_storage');
 
+function formatExpiryDisplay(expiresAt) {
+  if (!expiresAt) return 'Lifetime';
+  try {
+    const expDate = new Date(expiresAt);
+    const expTime = expDate.getTime();
+    if (isNaN(expTime)) return 'Lifetime';
+    const now = Date.now();
+    const diffMs = expTime - now;
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateStr = `${expDate.getFullYear()}-${pad(expDate.getMonth() + 1)}-${pad(expDate.getDate())}`;
+
+    if (diffMs <= 0) {
+      return `${dateStr} (Expired)`;
+    } else if (diffDays === 1) {
+      return `${dateStr} (1 Day Left)`;
+    } else {
+      return `${dateStr} (${diffDays} Days Left)`;
+    }
+  } catch (e) {
+    return 'Lifetime';
+  }
+}
+
+function getDaysRemaining(expiresAt) {
+  if (!expiresAt) return -1; // -1 represents Lifetime
+  try {
+    const expDate = new Date(expiresAt);
+    const expTime = expDate.getTime();
+    if (isNaN(expTime)) return -1;
+    const now = Date.now();
+    const diffMs = expTime - now;
+    if (diffMs <= 0) return 0;
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  } catch (e) {
+    return -1;
+  }
+}
+
 module.exports = async function handler(req, res) {
   // CORS & Anti-Cache Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -36,7 +75,7 @@ module.exports = async function handler(req, res) {
         });
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return res.status(200).send('AUTH_FAILED:Missing HWID Parameter');
+      return res.status(200).send('AUTH_FAILED:Missing HWID Parameter:N/A:error');
     }
 
     const cleanTarget = formatHWID(queryHWID);
@@ -52,11 +91,19 @@ module.exports = async function handler(req, res) {
           status: 'not_found',
           message: 'HWID is not registered in system',
           hwid: cleanTarget,
+          user: 'Unknown User',
+          expiresAt: 'N/A',
+          expiresDisplay: 'N/A',
+          daysRemaining: 0,
         });
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return res.status(200).send('AUTH_FAILED:Not Registered');
+      return res.status(200).send('AUTH_FAILED:Not Registered:N/A:unregistered');
     }
+
+    const cleanUserName = (found.name || 'User').trim();
+    const expiryDisplay = formatExpiryDisplay(found.expiresAt);
+    const daysLeft = getDaysRemaining(found.expiresAt);
 
     // 2. Suspended
     if (found.status === 'suspended') {
@@ -65,11 +112,15 @@ module.exports = async function handler(req, res) {
           valid: false,
           status: 'suspended',
           message: 'License has been suspended by administrator',
-          user: found.name,
+          user: cleanUserName,
+          hwid: found.hwid,
+          expiresAt: found.expiresAt || 'Lifetime',
+          expiresDisplay: expiryDisplay,
+          daysRemaining: daysLeft,
         });
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return res.status(200).send('AUTH_DENIED:Suspended');
+      return res.status(200).send(`AUTH_SUSPENDED:${cleanUserName}:${expiryDisplay}:suspended`);
     }
 
     // 3. Expired
@@ -79,33 +130,37 @@ module.exports = async function handler(req, res) {
           valid: false,
           status: 'expired',
           message: 'License duration has expired',
-          user: found.name,
-          expiredAt: found.expiresAt,
+          user: cleanUserName,
+          hwid: found.hwid,
+          expiresAt: found.expiresAt,
+          expiresDisplay: expiryDisplay,
+          daysRemaining: 0,
         });
       }
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return res.status(200).send('AUTH_DENIED:Expired');
+      return res.status(200).send(`AUTH_EXPIRED:${cleanUserName}:${expiryDisplay}:expired`);
     }
 
     // 4. Authorized Active User
-    const cleanUserName = (found.name || 'User').trim();
-
     if (wantsJson) {
       return res.status(200).json({
         valid: true,
         status: 'active',
+        message: 'License is active and authorized',
         user: cleanUserName,
         hwid: found.hwid,
         expiresAt: found.expiresAt || 'Lifetime',
+        expiresDisplay: expiryDisplay,
+        daysRemaining: daysLeft,
       });
     }
 
     // Default Plain Text format for HardwareId.cpp
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    return res.status(200).send(`AUTH_OK:${cleanUserName}`);
+    return res.status(200).send(`AUTH_OK:${cleanUserName}:${expiryDisplay}:active`);
   } catch (error) {
     console.error('Error in /api/verify handler:', error);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    return res.status(200).send('AUTH_FAILED:Internal Server Error');
+    return res.status(200).send('AUTH_FAILED:Internal Server Error:N/A:error');
   }
 };

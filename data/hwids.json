@@ -1,29 +1,30 @@
 [
   {
-    "id": "hwid_1787081242354",
-    "name": "xxx",
-    "hwid": "70F8-339D-6DD6-870D",
+    "id": "1",
+    "name": "Jaymian_Admin",
+    "hwid": "AAAA-BBBB-CCCC-DDDD",
     "status": "active",
-    "expiresAt": null,
-    "createdAt": "2026-08-18T19:27:22.354Z",
-    "notes": "VIP User"
+    "expiresAt": null
   },
   {
-    "id": "hwid_init_1",
-    "name": "Admin_Jaymian",
-    "hwid": "4944-4444-4444-4444",
+    "id": "2",
+    "name": "Member_30Days",
+    "hwid": "1111-2222-3333-4444",
     "status": "active",
-    "expiresAt": null,
-    "createdAt": "2026-08-19T00:00:00.000Z",
-    "notes": "Owner / Administrator Access"
+    "expiresAt": "2026-09-18T19:12:51.988Z"
   },
   {
-    "id": "hwid_init_2",
-    "name": "VipUser_Juan",
-    "hwid": "61A3-8B54-96B2-7777",
+    "id": "3",
+    "name": "BadActor_Suspended",
+    "hwid": "5555-6666-7777-8888",
+    "status": "suspended",
+    "expiresAt": null
+  },
+  {
+    "id": "4",
+    "name": "OldMember_Expired",
+    "hwid": "9999-0000-1111-2222",
     "status": "active",
-    "expiresAt": null,
-    "createdAt": "2026-08-19T00:00:00.000Z",
-    "notes": "VIP Access"
+    "expiresAt": "2020-01-01T00:00:00.000Z"
   }
 ]
