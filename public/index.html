@@ -47,6 +47,9 @@
         <button onclick="window.HWIDApp.exportBackup()" class="btn btn-secondary btn-sm" title="Backup all HWIDs as JSON">
           💾 Backup
         </button>
+        <a href="/GetRaw.txt" target="_blank" class="btn btn-secondary btn-sm" title="Open live GetRaw.txt in new tab (USER:HWID)">
+          📄 GetRaw.txt
+        </a>
       </div>
     </header>
 
@@ -117,6 +120,9 @@
         <div class="action-button-group">
           <button id="refreshBtn" class="btn btn-secondary" title="Refresh List">
             🔄 Refresh
+          </button>
+          <button id="openRawModalBtn" class="btn btn-secondary" title="View &amp; Export live GetRaw.txt (USER:HWID)">
+            📄 GetRaw.txt
           </button>
           <button id="openCppBtn" class="btn btn-secondary" title="View C++ Code Integration">
             💻 C++ Code
@@ -602,6 +608,54 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL: Live GetRaw.txt Preview & Export
+       ======================================================================== -->
+  <div id="rawModal" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <span>📄</span> Live GetRaw.txt (USER:HWID)
+        </h3>
+        <button id="closeRawBtn" class="modal-close" type="button">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div style="margin-bottom: 12px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+          Ito ang live plain-text content ng <code>GetRaw.txt</code>. Lahat ng <strong>Active</strong> licenses na in-activate o binura mo sa dashboard ay awtomatikong nagre-reflect dito:
+        </div>
+
+        <div class="code-snippet-wrap">
+          <div class="code-header">
+            <span>🔴 LIVE ENDPOINT: <code style="color: var(--accent-cyan);">/GetRaw.txt</code></span>
+            <span id="rawLinesCount" class="badge-tag">0 Active Users</span>
+          </div>
+          <pre id="rawContentPreview" class="code-block" style="max-height: 240px; overflow-y: auto; white-space: pre-wrap; font-family: 'Consolas', monospace; color: #a5f3fc; padding: 14px; background: rgba(10, 15, 29, 0.95); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: var(--radius-md);">Loading raw content...</pre>
+        </div>
+
+        <div style="margin-top: 12px; background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: var(--radius-md); padding: 10px 12px; font-size: 0.8rem; color: var(--text-secondary);">
+          💡 <strong>Direct URL para sa C++ Loader:</strong><br>
+          <code style="color: #38bdf8;">https://hwid-management-system.vercel.app/GetRaw.txt</code>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button" onclick="document.getElementById('closeRawBtn').click()" class="btn btn-secondary">
+          Close
+        </button>
+        <button type="button" id="copyRawBtn" class="btn btn-secondary">
+          📋 Copy Text
+        </button>
+        <a href="/GetRaw.txt" target="_blank" class="btn btn-secondary">
+          🌐 Open Tab
+        </a>
+        <button type="button" id="downloadRawBtn" class="btn btn-emerald">
+          📥 Download Raw.txt
+        </button>
+      </div>
     </div>
   </div>
 

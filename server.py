@@ -134,18 +134,10 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def check_auth(self):
-        auth_header = self.headers.get('Authorization', '')
-        secret_header = self.headers.get('x-admin-secret', '')
+        # Direct Access Enabled (No PIN restriction)
+        return True
 
-        if secret_header == ADMIN_SECRET:
-            return True
-        if auth_header:
-            token = auth_header.replace('Bearer ', '').strip()
-            if token == ADMIN_SECRET or token.startswith(ADMIN_SECRET):
-                return True
-        return True  # Permissive in dev local mode if needed, but validated
-
-    def get_json_body(self):
+    def parse_json_body(self):
         content_len = int(self.headers.get('Content-Length', 0))
         if content_len > 0:
             raw_body = self.rfile.read(content_len).decode('utf-8')
@@ -161,7 +153,7 @@ class HWIDRequestHandler(http.server.SimpleHTTPRequestHandler):
         query = urllib.parse.parse_qs(parsed.query)
 
         # 1. Raw plain text endpoint for C++ client (NAME:HWID)
-        if path in ['/api/raw', '/raw.txt', '/raw']:
+        if path in ['/api/raw', '/raw.txt', '/raw', '/GetRaw.txt', '/getraw.txt', '/GetRaw']:
             raw_text = get_active_raw_lines()
             self.send_response(200)
             self.send_cors_headers()

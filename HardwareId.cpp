@@ -247,7 +247,7 @@ bool cHardwareId::CheckHWIDLock()
 	// Fallback to secondary raw endpoint if direct verify returned empty (e.g. network hiccup)
 	if (response.empty())
 	{
-		std::string rawUrl = "https://hwid-management-system.vercel.app/api/raw";
+		std::string rawUrl = "https://hwid-management-system.vercel.app/GetRaw.txt";
 		std::string rawList = this->GetHWIDList(rawUrl);
 
 		if (!rawList.empty())

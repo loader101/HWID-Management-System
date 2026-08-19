@@ -7,6 +7,18 @@
   },
   "rewrites": [
     {
+      "source": "/GetRaw.txt",
+      "destination": "/api/raw"
+    },
+    {
+      "source": "/getraw.txt",
+      "destination": "/api/raw"
+    },
+    {
+      "source": "/GetRaw",
+      "destination": "/api/raw"
+    },
+    {
       "source": "/raw.txt",
       "destination": "/api/raw"
     },
@@ -16,6 +28,14 @@
     }
   ],
   "headers": [
+    {
+      "source": "/GetRaw.txt",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0" },
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    },
     {
       "source": "/api/raw",
       "headers": [

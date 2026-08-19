@@ -112,6 +112,15 @@
     cloudStorageModal: document.getElementById('cloudStorageModal'),
     closeCloudStorageBtn: document.getElementById('closeCloudStorageBtn'),
 
+    // Raw Modal
+    rawModal: document.getElementById('rawModal'),
+    openRawModalBtn: document.getElementById('openRawModalBtn'),
+    closeRawBtn: document.getElementById('closeRawBtn'),
+    rawContentPreview: document.getElementById('rawContentPreview'),
+    rawLinesCount: document.getElementById('rawLinesCount'),
+    copyRawBtn: document.getElementById('copyRawBtn'),
+    downloadRawBtn: document.getElementById('downloadRawBtn'),
+
     // Toast Container
     toastContainer: document.getElementById('toastContainer'),
   };
@@ -919,6 +928,67 @@
 
     if (elements.closeCloudStorageBtn) {
       elements.closeCloudStorageBtn.addEventListener('click', () => closeModal(elements.cloudStorageModal));
+    }
+
+    // Live GetRaw.txt Modal Logic
+    function updateRawModalContent() {
+      const activeLines = state.hwids
+        .filter((r) => {
+          const status = (r.status || 'active').toLowerCase();
+          const expired = r.expiresAt ? new Date(r.expiresAt).getTime() < Date.now() : false;
+          return status === 'active' && !expired && r.name && r.hwid;
+        })
+        .map((r) => `${r.name.trim()}:${r.hwid.trim().toUpperCase()}`);
+
+      const rawText = activeLines.join('\n');
+      if (elements.rawContentPreview) {
+        elements.rawContentPreview.textContent = rawText || '# No active HWIDs registered';
+      }
+      if (elements.rawLinesCount) {
+        elements.rawLinesCount.textContent = `${activeLines.length} Active User(s)`;
+      }
+      return rawText;
+    }
+
+    if (elements.openRawModalBtn) {
+      elements.openRawModalBtn.addEventListener('click', async () => {
+        updateRawModalContent();
+        openModal(elements.rawModal);
+        try {
+          const res = await fetch('/GetRaw.txt?' + Date.now());
+          if (res.ok) {
+            const serverText = await res.text();
+            if (serverText.trim()) {
+              elements.rawContentPreview.textContent = serverText;
+            }
+          }
+        } catch (e) {}
+      });
+    }
+
+    if (elements.closeRawBtn) {
+      elements.closeRawBtn.addEventListener('click', () => closeModal(elements.rawModal));
+    }
+
+    if (elements.copyRawBtn) {
+      elements.copyRawBtn.addEventListener('click', () => {
+        const text = elements.rawContentPreview.textContent;
+        copyToClipboard(text, 'GetRaw.txt content copied to clipboard!');
+      });
+    }
+
+    if (elements.downloadRawBtn) {
+      elements.downloadRawBtn.addEventListener('click', () => {
+        const text = elements.rawContentPreview.textContent;
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = URL.createObjectURL(blob);
+        downloadAnchor.download = 'GetRaw.txt';
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        showToast('GetRaw.txt downloaded successfully!', 'success');
+      });
     }
 
     // Auth / Settings Modal
