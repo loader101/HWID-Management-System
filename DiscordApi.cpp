@@ -1,6 +1,5 @@
 #include <thread>
 #include "DiscordApi.hpp"
-#include "HardwareId.hpp"
 
 std::string cDiscordApi::GetLocationInfo(const std::string& ip)
 {
@@ -95,28 +94,25 @@ void cDiscordApi::SendToDiscordEmbed(const std::string& webhookPath, const std::
 
 	std::string displayCfUser = cfUser.empty() ? "N/A" : cfUser;
 	std::string displayCfIgn = cfIgn.empty() ? "N/A" : cfIgn;
-	std::string rawPair = user + ":" + hwid;
 
 	std::ostringstream oss;
 	oss << "{"
-		<< "\"content\": \"📌 **HWID Log:** `" << rawPair << "`\","
 		<< "\"embeds\": [{"
 		<< "\"title\": \"" << title << "\","
 		<< "\"color\": " << statusColor << ","
 
 		<< "\"fields\": ["
 
-		<< "{\"name\": \"User\", \"value\": \"" << user << "\", \"inline\": true},"
-		<< "{\"name\": \"HWID\", \"value\": \"`" << hwid << "`\", \"inline\": true},"
-		<< "{\"name\": \"USER:HWID Pair\", \"value\": \"`" << rawPair << "`\", \"inline\": false},"
-		<< "{\"name\": \"CF-USER\", \"value\": \"" << displayCfUser << "\", \"inline\": true},"
-		<< "{\"name\": \"CF-IGN\", \"value\": \"" << displayCfIgn << "\", \"inline\": true},"
-		<< "{\"name\": \"Computer Name\", \"value\": \"" << computerName << "\", \"inline\": true},"
-		<< "{\"name\": \"User Name\", \"value\": \"" << userName << "\", \"inline\": true},"
-		<< "{\"name\": \"IP Address\", \"value\": \"" << ip << "\", \"inline\": true},"
+		<< "{\"name\": \"User\", \"value\": \"" << user << "\", \"inline\": false},"
+		<< "{\"name\": \"HWID\", \"value\": \"" << hwid << "\", \"inline\": false},"
+		<< "{\"name\": \"CF-USER\", \"value\": \"" << displayCfUser << "\", \"inline\": false},"
+		<< "{\"name\": \"CF-IGN\", \"value\": \"" << displayCfIgn << "\", \"inline\": false},"
+		<< "{\"name\": \"Computer Name\", \"value\": \"" << computerName << "\", \"inline\": false},"
+		<< "{\"name\": \"User Name\", \"value\": \"" << userName << "\", \"inline\": false},"
+		<< "{\"name\": \"IP Address\", \"value\": \"" << ip << "\", \"inline\": false},"
 		<< "{\"name\": \"Location\", \"value\": \"" << location << "\", \"inline\": false},"
-		<< "{\"name\": \"Date and Time\", \"value\": \"" << datetime << "\", \"inline\": true},"
-		<< "{\"name\": \"Status\", \"value\": \"" << status << "\", \"inline\": true}"
+		<< "{\"name\": \"Date and Time\", \"value\": \"" << datetime << "\", \"inline\": false},"
+		<< "{\"name\": \"Status\", \"value\": \"" << status << "\", \"inline\": false}"
 
 		<< "]"
 		<< "}]"
@@ -141,15 +137,16 @@ void cDiscordApi::SendGameTimeToDiscord(const std::string& user, const std::stri
 		static CTimer g_GameTime;
 		static CTimer g_SendTime;
 
-		uint64_t elapsedMs = g_GameTime.GetMs();
+		uint64_t elapsedMs = g_GameTime.GetMs();//ano to par
 		uint64_t totalSeconds = (elapsedMs / 1000);
-		int hours = StaCa<int>(totalSeconds / 3600);
-		int minutes = StaCa<int>((totalSeconds % 3600) / 60);
-		int seconds = StaCa<int>(totalSeconds % 60);
+		int hours = static_cast<int>(totalSeconds / 3600);
+		int minutes = static_cast<int>((totalSeconds % 3600) / 60);
+		int seconds = static_cast<int>(totalSeconds % 60);
 
 		std::string gameTimeStr = std::to_string(hours) + "h " + std::to_string(minutes) + "m " + std::to_string(seconds) + "s";
 
 		if (g_SendTime.WaitForMilliseconds(180000)) // 3 minutes = 180,000 milliseconds
+		//if (g_SendTime.WaitForMilliseconds(60000)) // 1 minute
 		{
 			if (reset_once == false)
 			{
@@ -224,20 +221,16 @@ void cDiscordApi::SendInfoToDiscord(const std::string& cfUser, const std::string
 
 	std::string status;
 	std::string color;
-	std::string title;
 
 	if (isAuthorized)
 	{
-		status = "✅ Activated";
+		status = "Activated";
 		color = "65280"; // Green
-		title = "✅ User Login: " + name;
 	}
 	else
 	{
-		// Expired / Unauthorized Attempt Log (USER:HWID format)
-		status = "❌ EXPIRED / UNAUTHORIZED (" + name + ":" + serial + ")";
+		status = "Not Activated / Unauthorized";
 		color = "16711680"; // Red
-		title = "⚠️ EXPIRED / UNAUTHORIZED LOGS: " + name + ":" + serial;
 	}
 
 	std::string displayCfUser = cfUser;
@@ -256,11 +249,10 @@ void cDiscordApi::SendInfoToDiscord(const std::string& cfUser, const std::string
 				displayCfIgn = cf_ign_;
 		}
 	}
-
 	std::string discordWebHooks = "/api/webhooks/1443246398815469578/s1xH9fV9SfaUNqr5w7GueEj0uYbLOE6erL71DDSdf9Zt4lYgRtG_PphIiD2zuhTZs_BK";
 	this->SendToDiscordEmbed(
 		discordWebHooks.c_str(),
-		title,
+		"User Activity Detected",
 		name,
 		serial,
 		computername,
@@ -275,28 +267,4 @@ void cDiscordApi::SendInfoToDiscord(const std::string& cfUser, const std::string
 	);
 
 	this->IsSentToDiscord = true;
-}
-
-void cDiscordApi::SendExpiredLog(const std::string& user, const std::string& hwid)
-{
-	std::string ip = this->GetIPAddress();
-	std::string location = this->GetLocationInfo(ip);
-	std::string datetime = CUtils::get()->GetDateTime();
-	std::string username = cHardwareId::get()->GetCompUserName(true);
-	std::string computername = cHardwareId::get()->GetCompUserName(false);
-
-	std::string discordWebHooks = "/api/webhooks/1443246398815469578/s1xH9fV9SfaUNqr5w7GueEj0uYbLOE6erL71DDSdf9Zt4lYgRtG_PphIiD2zuhTZs_BK";
-	this->SendToDiscordEmbed(
-		discordWebHooks.c_str(),
-		"⚠️ EXPIRED LOGS: " + user + ":" + hwid,
-		user,
-		hwid,
-		computername,
-		username,
-		ip,
-		location,
-		datetime,
-		"❌ EXPIRED (BLOCKED)",
-		"16744192" // Orange/Red
-	);
 }

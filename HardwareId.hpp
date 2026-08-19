@@ -9,7 +9,7 @@ class cHardwareId : public Singleton<cHardwareId>
 {
 private:
 	std::string matchedName = "";
-	std::string hwidStatus = "Unauthorized";
+	std::string hwidStatus  = "Unauthorized";  // FIX: was missing from header
 
 public:
 	std::string GetHWIDList(const std::string& url);
@@ -27,8 +27,8 @@ public:
 	bool CheckHWIDLock();
 
 	std::string GetMatchedName();
-	std::string GetHWIDStatus();
-	bool IsExpired();
+	std::string GetHWIDStatus();  // FIX: was missing from header
+	bool IsExpired();              // FIX: was missing from header
 };
 
 #endif

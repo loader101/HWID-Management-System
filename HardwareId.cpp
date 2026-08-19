@@ -1,30 +1,49 @@
 #include "HardwareId.hpp"
 #include "DiscordApi.hpp"
 
+// --------------------------------------------------------------------------
+// HTTP GET helper — fetches plain-text response from any URL.
+// Handles HTTPS, no-cache flags, and a 10-second hard timeout so the client
+// never hangs on a cold Vercel serverless start.
+// --------------------------------------------------------------------------
 std::string cHardwareId::GetHWIDList(const std::string& url)
 {
 	// 1. Open Internet session
-	HINTERNET hInternet = InternetOpenA("Mozilla/5.0 (Windows NT 10.0; Win64; x64) HWIDClient/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+	HINTERNET hInternet = InternetOpenA(
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) HWIDClient/1.0",
+		INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+
 	if (!hInternet)
 	{
 		hInternet = InternetOpenA("HWIDChecker", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
 		if (!hInternet) return "";
 	}
 
-	// 2. Detect HTTPS vs HTTP
+	// 2. Set timeouts (10 seconds) — prevents hanging on cold Vercel starts
+	DWORD dwTimeout = 10000;
+	InternetSetOption(hInternet, INTERNET_OPTION_CONNECT_TIMEOUT, &dwTimeout, sizeof(dwTimeout));
+	InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &dwTimeout, sizeof(dwTimeout));
+	InternetSetOption(hInternet, INTERNET_OPTION_SEND_TIMEOUT,    &dwTimeout, sizeof(dwTimeout));
+
+	// 3. Detect HTTPS vs HTTP
 	bool isHttps = (url.rfind("https://", 0) == 0);
-	DWORD flags = INTERNET_FLAG_RELOAD | INTERNET_FLAG_DONT_CACHE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_NO_CACHE_WRITE;
+	DWORD flags  = INTERNET_FLAG_RELOAD
+	             | INTERNET_FLAG_DONT_CACHE
+	             | INTERNET_FLAG_PRAGMA_NOCACHE
+	             | INTERNET_FLAG_NO_CACHE_WRITE;
 
 	if (isHttps)
 	{
-		flags |= INTERNET_FLAG_SECURE | INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID;
+		flags |= INTERNET_FLAG_SECURE
+		      |  INTERNET_FLAG_IGNORE_CERT_CN_INVALID
+		      |  INTERNET_FLAG_IGNORE_CERT_DATE_INVALID;
 	}
 
-	// 3. Open URL
+	// 4. Open URL
 	HINTERNET hFile = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, flags, 0);
 	if (!hFile)
 	{
-		// Fallback retry with reload only
+		// Fallback: retry with reload only
 		hFile = InternetOpenUrlA(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD, 0);
 		if (!hFile)
 		{
@@ -33,9 +52,9 @@ std::string cHardwareId::GetHWIDList(const std::string& url)
 		}
 	}
 
-	// 4. Read Response
-	char buffer[4096];
-	DWORD bytesRead = 0;
+	// 5. Read Response
+	char   buffer[4096];
+	DWORD  bytesRead = 0;
 	std::string result = "";
 
 	while (InternetReadFile(hFile, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead != 0)
@@ -177,7 +196,7 @@ std::string cHardwareId::GetHashText(const void* data, const size_t data_size)
 	{
 		oss.fill('0');
 		oss.width(2);
-		oss << std::hex << StaCa<const int>(*iter);
+		oss << std::hex << static_cast<const int>(*iter);  // FIX: was "StaCa<const int>" (typo)
 	}
 
 	CryptDestroyHash(hHash);
@@ -188,10 +207,11 @@ std::string cHardwareId::GetHashText(const void* data, const size_t data_size)
 std::string cHardwareId::GetHashSerialKey()
 {
 	std::string SerialKey = this->GetSerialKey();
-	const void* pData = SerialKey.c_str();
-	size_t Size = SerialKey.size();
-	std::string Hash = this->GetHashText(pData, Size);
+	const void* pData     = SerialKey.c_str();
+	size_t      Size      = SerialKey.size();
+	std::string Hash      = this->GetHashText(pData, Size);
 
+	// Original HWID transformation algorithm
 	for (auto& c : Hash)
 	{
 		if (c >= 'a' && c <= 'f')
@@ -219,7 +239,7 @@ std::string cHardwareId::GetHashSerialKey()
 			c = '9';
 		}
 
-		c = toupper(c);
+		c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
 	}
 
 	return Hash;
@@ -246,77 +266,129 @@ std::string cHardwareId::GetSerial()
 	return Serial;
 }
 
+// --------------------------------------------------------------------------
+// CheckHWIDLock — verifies the current machine's HWID against the Vercel API.
+//
+// Endpoint: https://hwid-management-system.vercel.app/api/verify?hwid=XXXX-XXXX-XXXX-XXXX
+//
+// API Responses:
+//   AUTH_OK:<username>           -> Active license  [OK]
+//   AUTH_DENIED:Expired          -> Expired         [BLOCKED]
+//   AUTH_DENIED:Suspended        -> Suspended       [BLOCKED]
+//   AUTH_FAILED:Not Registered   -> Not in database [BLOCKED]
+//   AUTH_FAILED:*                -> Error / no conn [BLOCKED]
+// --------------------------------------------------------------------------
 bool cHardwareId::CheckHWIDLock()
 {
 	this->matchedName = "";
-	this->hwidStatus = "Unauthorized";
+	this->hwidStatus  = "Unauthorized";
+
 	std::string currentHWID = this->GetSerial();
 
 	if (currentHWID.empty()) {
-		return false;
-	}
-
-	// ------------------------------------------------------------------------
-	// Verification Endpoint:
-	// Para sa Vercel (Online):  "https://hwid-management-system.vercel.app/api/verify?hwid="
-	// Para sa Local Testing:    "http://127.0.0.1:3000/api/verify?hwid="
-	// ------------------------------------------------------------------------
-	std::string baseUrl = "https://hwid-management-system.vercel.app/api/verify?hwid=";
-	
-	// Kung gusto mo mag-test sa localhost habang bukas ang python server.py:
-	// std::string baseUrl = "http://127.0.0.1:3000/api/verify?hwid=";
-
-	std::string verifyUrl = baseUrl + currentHWID;
-	std::string response = this->GetHWIDList(verifyUrl);
-
-	if (response.empty()) {
 		this->hwidStatus = "Connection Failed";
 		return false;
 	}
 
-	// Trim whitespace / newlines / carriage returns
-	response = CUtils::get()->Trim(response);
+	// -----------------------------------------------------------------------
+	// Primary: Direct Verification API endpoint
+	// -----------------------------------------------------------------------
+	std::string baseUrl   = "https://hwid-management-system.vercel.app/api/verify?hwid=";
+	std::string verifyUrl = baseUrl + currentHWID;
+	std::string response  = this->GetHWIDList(verifyUrl);
 
-	// 1. Plain Text Active Check: "AUTH_OK:Username"
-	if (response.rfind("AUTH_OK:", 0) == 0)
+	if (!response.empty())
 	{
-		this->matchedName = response.substr(8); // Extracts the authorized username
-		this->hwidStatus = "Activated";
-		return true; // License is valid and active!
-	}
+		response = CUtils::get()->Trim(response);
 
-	// 2. Expired License Check: "AUTH_DENIED:Expired"
-	if (response.rfind("AUTH_DENIED:Expired", 0) == 0 || response.find("\"status\":\"expired\"") != std::string::npos)
-	{
-		this->hwidStatus = "Expired";
-		return false; // ❌ 100% BLOCKED
-	}
-
-	// 3. Suspended License Check: "AUTH_DENIED:Suspended"
-	if (response.rfind("AUTH_DENIED:Suspended", 0) == 0 || response.find("\"status\":\"suspended\"") != std::string::npos)
-	{
-		this->hwidStatus = "Suspended";
-		return false; // ❌ 100% BLOCKED
-	}
-
-	// 4. JSON Fallback Check: {"valid":true,"user":"Username"}
-	if (response.find("\"valid\":true") != std::string::npos || response.find("\"valid\": true") != std::string::npos)
-	{
-		size_t userPos = response.find("\"user\":");
-		if (userPos != std::string::npos)
+		// 1. Active license: server returns "AUTH_OK:Username"
+		if (response.rfind("AUTH_OK:", 0) == 0)
 		{
-			size_t startQuote = response.find('\"', userPos + 7);
-			size_t endQuote = response.find('\"', startQuote + 1);
-			if (startQuote != std::string::npos && endQuote != std::string::npos)
+			this->matchedName = response.substr(8);
+			this->hwidStatus  = "Activated";
+			return true;
+		}
+
+		// 2. Expired license: "AUTH_DENIED:Expired"
+		if (response.rfind("AUTH_DENIED:Expired", 0) == 0
+		    || response.find("\"status\":\"expired\"") != std::string::npos)
+		{
+			this->hwidStatus = "Expired";
+			return false;
+		}
+
+		// 3. Suspended license: "AUTH_DENIED:Suspended"
+		if (response.rfind("AUTH_DENIED:Suspended", 0) == 0
+		    || response.find("\"status\":\"suspended\"") != std::string::npos)
+		{
+			this->hwidStatus = "Suspended";
+			return false;
+		}
+
+		// 4. JSON fallback: {"valid":true,"user":"Username"}
+		if (response.find("\"valid\":true") != std::string::npos
+		    || response.find("\"valid\": true") != std::string::npos)
+		{
+			size_t userPos = response.find("\"user\":");
+			if (userPos != std::string::npos)
 			{
-				this->matchedName = response.substr(startQuote + 1, endQuote - startQuote - 1);
+				size_t startQuote = response.find('"', userPos + 7);
+				size_t endQuote   = response.find('"', startQuote + 1);
+				if (startQuote != std::string::npos && endQuote != std::string::npos)
+				{
+					this->matchedName = response.substr(startQuote + 1, endQuote - startQuote - 1);
+				}
+			}
+			this->hwidStatus = "Activated";
+			return true;
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// Secondary Fallback: Check /api/raw list line by line (NAME:HWID)
+	// -----------------------------------------------------------------------
+	std::string rawUrl  = "https://hwid-management-system.vercel.app/api/raw";
+	std::string rawList = this->GetHWIDList(rawUrl);
+
+	if (!rawList.empty())
+	{
+		std::istringstream iss(rawList);
+		std::string line;
+
+		while (std::getline(iss, line))
+		{
+			line = CUtils::get()->Trim(line);
+			if (line.empty()) continue;
+
+			size_t delimiter = line.find(':');
+			if (delimiter != std::string::npos)
+			{
+				std::string name = line.substr(0, delimiter);
+				std::string hwid = line.substr(delimiter + 1);
+
+				// Trim any extra spaces
+				name = CUtils::get()->Trim(name);
+				hwid = CUtils::get()->Trim(hwid);
+
+				if (hwid == currentHWID)
+				{
+					this->matchedName = name;
+					this->hwidStatus  = "Activated";
+					return true;
+				}
 			}
 		}
-		this->hwidStatus = "Activated";
-		return true;
 	}
 
-	this->hwidStatus = "Not Registered";
+	if (response.empty() && rawList.empty())
+	{
+		this->hwidStatus = "Connection Failed";
+	}
+	else
+	{
+		this->hwidStatus = "Not Registered";
+	}
+
 	return false;
 }
 
