@@ -1,5 +1,14 @@
 [
   {
+    "id": "hwid_1787168349376_xuu2eb",
+    "name": "ClientFromWebsite",
+    "hwid": "7777-8888-9999-0000",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-19T19:39:09.376Z",
+    "notes": "Activated via web dashboard form"
+  },
+  {
     "id": "hwid_1",
     "name": "JayyTesddddddt",
     "hwid": "4d271-42d43-4442-4d444x",
