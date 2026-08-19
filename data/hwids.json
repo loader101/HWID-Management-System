@@ -1,30 +1,29 @@
 [
   {
-    "id": "1",
+    "id": "hwid_1",
+    "name": "JayyTest",
+    "hwid": "4271-4243-4442-4444",
+    "status": "active",
+    "expiresAt": null,
+    "createdAt": "2026-08-20T00:00:00.000Z",
+    "notes": "Owner Active Access"
+  },
+  {
+    "id": "hwid_2",
     "name": "Jaymian_Admin",
     "hwid": "AAAA-BBBB-CCCC-DDDD",
     "status": "active",
-    "expiresAt": null
+    "expiresAt": null,
+    "createdAt": "2026-08-19T00:00:00.000Z",
+    "notes": "Admin"
   },
   {
-    "id": "2",
+    "id": "hwid_3",
     "name": "Member_30Days",
     "hwid": "1111-2222-3333-4444",
     "status": "active",
-    "expiresAt": "2026-09-18T19:12:51.988Z"
-  },
-  {
-    "id": "3",
-    "name": "BadActor_Suspended",
-    "hwid": "5555-6666-7777-8888",
-    "status": "suspended",
-    "expiresAt": null
-  },
-  {
-    "id": "4",
-    "name": "OldMember_Expired",
-    "hwid": "9999-0000-1111-2222",
-    "status": "active",
-    "expiresAt": "2020-01-01T00:00:00.000Z"
+    "expiresAt": "2026-09-30T00:00:00.000Z",
+    "createdAt": "2026-08-19T00:00:00.000Z",
+    "notes": "30 Days Access"
   }
 ]

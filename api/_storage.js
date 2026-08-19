@@ -15,8 +15,26 @@ try {
 }
 
 // Environment Variables for Cloud Persistence
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+function getKVUrl() {
+  let url = process.env.KV_REST_API_URL || 
+            process.env.UPSTASH_REDIS_REST_URL || 
+            process.env.STORAGE_REDIS_REST_URL || 
+            process.env.VERCEL_KV_REST_API_URL || 
+            '';
+  if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+  return url.replace(/\/+$/, '');
+}
+
+function getKVToken() {
+  return process.env.KV_REST_API_TOKEN || 
+         process.env.UPSTASH_REDIS_REST_TOKEN || 
+         process.env.STORAGE_REDIS_REST_TOKEN || 
+         process.env.VERCEL_KV_REST_API_TOKEN || 
+         '';
+}
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GIST_ID = process.env.GIST_ID;
 
@@ -26,38 +44,66 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || '0909';
 const LOCAL_DATA_FILE = path.join(process.cwd(), 'data', 'hwids.json');
 const TMP_DATA_FILE = path.join('/tmp', 'hwids.json');
 
-// NOTE: memoryCache is intentionally NOT used as a cross-request cache.
-// Vercel serverless routes requests to different container instances that each
-// have their own isolated memory — relying on it causes stale-data delays.
-// It is only used transiently within a single saveAllHWIDs call chain.
 let memoryCache = null;
 
 // Determine storage type
 function getStorageType() {
-  if (KV_URL && KV_TOKEN) return 'Upstash Redis / Vercel KV';
+  const url = getKVUrl();
+  const token = getKVToken();
+  if (url && token) return 'Upstash Redis / Vercel KV';
   if (GITHUB_TOKEN && GIST_ID) return 'GitHub Gist';
   return 'Local / Ephemeral (Vercel Serverless)';
 }
 
 function hasCloudPersistence() {
-  return !!((KV_URL && KV_TOKEN) || (GITHUB_TOKEN && GIST_ID));
+  const url = getKVUrl();
+  const token = getKVToken();
+  return !!((url && token) || (GITHUB_TOKEN && GIST_ID));
 }
 
 // --------------------------------------------------------------------------
 // 1. Upstash Redis / Vercel KV REST
 // --------------------------------------------------------------------------
 async function getFromKV() {
-  if (!KV_URL || !KV_TOKEN) return null;
+  const kvUrl = getKVUrl();
+  const kvToken = getKVToken();
+  if (!kvUrl || !kvToken) return null;
+
   try {
-    const cleanUrl = KV_URL.replace(/\/+$/, '');
-    const res = await fetch(`${cleanUrl}/get/${KV_KEY}`, {
-      headers: { Authorization: `Bearer ${KV_TOKEN}` },
+    // 1. Try Official Command Array POST / (["GET", "HWID_DATABASE"])
+    let res = await fetch(kvUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${kvToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(['GET', KV_KEY]),
     });
-    if (!res.ok) return null;
+
+    // 2. Fallback to GET /get/KEY
+    if (!res.ok) {
+      res = await fetch(`${kvUrl}/get/${KV_KEY}`, {
+        headers: { Authorization: `Bearer ${kvToken}` },
+      });
+    }
+
+    if (!res.ok) {
+      return null;
+    }
+
     const data = await res.json();
     if (data && data.result) {
-      const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result;
-      if (Array.isArray(parsed)) return parsed;
+      let val = data.result;
+      if (typeof val === 'string') {
+        try {
+          val = JSON.parse(val);
+          // Handle potential double stringification
+          if (typeof val === 'string') {
+            val = JSON.parse(val);
+          }
+        } catch (e) {}
+      }
+      if (Array.isArray(val)) return val;
     }
     return null;
   } catch (err) {
@@ -67,17 +113,35 @@ async function getFromKV() {
 }
 
 async function saveToKV(records) {
-  if (!KV_URL || !KV_TOKEN) return false;
+  const kvUrl = getKVUrl();
+  const kvToken = getKVToken();
+  if (!kvUrl || !kvToken) return false;
+
   try {
-    const cleanUrl = KV_URL.replace(/\/+$/, '');
-    const res = await fetch(`${cleanUrl}/set/${KV_KEY}`, {
+    const jsonStr = JSON.stringify(records);
+
+    // 1. Official Upstash REST Command: POST / with body ["SET", "HWID_DATABASE", "<value>"]
+    let res = await fetch(kvUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${KV_TOKEN}`,
+        Authorization: `Bearer ${kvToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(JSON.stringify(records)),
+      body: JSON.stringify(['SET', KV_KEY, jsonStr]),
     });
+
+    // 2. Fallback to path-based: POST /set/KEY
+    if (!res.ok) {
+      res = await fetch(`${kvUrl}/set/${KV_KEY}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${kvToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jsonStr),
+      });
+    }
+
     return res.ok;
   } catch (err) {
     console.error('Error saving to KV:', err);
@@ -191,30 +255,29 @@ function saveToFile(records) {
 // Unified Storage API
 // --------------------------------------------------------------------------
 async function getAllHWIDs() {
-  // IMPORTANT: Never short-circuit with memoryCache here.
-  // Vercel may route any request to a fresh Lambda instance with empty memory.
-  // Always go to the authoritative cloud store first for accurate, up-to-date data.
+  const kvUrl = getKVUrl();
+  const kvToken = getKVToken();
 
   // 1. Check Upstash / Vercel KV (source of truth when configured)
-  if (KV_URL && KV_TOKEN) {
+  if (kvUrl && kvToken) {
     const kvData = await getFromKV();
-    if (kvData && Array.isArray(kvData)) {
-      // Write through to /tmp so local fallback is warm within this container
+    if (kvData && Array.isArray(kvData) && kvData.length > 0) {
       saveToFile(kvData);
       return kvData;
     }
-    // KV is configured but empty — seed it with local/default data
+    // If KV returned empty/null, read from local / default
     const local = readFromFile();
     if (local && local.length > 0) {
       await saveToKV(local);
+      return local;
     }
-    return local;
+    return local || [];
   }
 
   // 2. Check GitHub Gist (source of truth when configured)
   if (GITHUB_TOKEN && GIST_ID) {
     const gistData = await getFromGist();
-    if (gistData && Array.isArray(gistData)) {
+    if (gistData && Array.isArray(gistData) && gistData.length > 0) {
       saveToFile(gistData);
       return gistData;
     }
@@ -225,9 +288,12 @@ async function getAllHWIDs() {
 }
 
 async function saveAllHWIDs(records) {
+  const kvUrl = getKVUrl();
+  const kvToken = getKVToken();
+
   // Save to all configured cloud stores in parallel for speed
   const saves = [];
-  if (KV_URL && KV_TOKEN) {
+  if (kvUrl && kvToken) {
     saves.push(saveToKV(records));
   }
   if (GITHUB_TOKEN && GIST_ID) {
